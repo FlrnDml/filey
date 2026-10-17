@@ -1,0 +1,51 @@
+.filey-field__label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font: var(--type-label);
+  color: var(--text);
+}
+
+.filey-field__optional {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.filey-input {
+  display: block;
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font: var(--type-body);
+}
+
+.filey-input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.filey-input--mono {
+  font: var(--type-mono);
+}
+
+.filey-input--invalid {
+  border-color: var(--danger);
+}
+
+.filey-input:disabled {
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.filey-field__message {
+  margin-top: var(--space-1);
+  font: var(--type-small);
+  color: var(--text-muted);
+}
+
+.filey-field__message--error {
+  color: var(--danger);
+}

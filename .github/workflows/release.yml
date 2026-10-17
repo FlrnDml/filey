@@ -1,0 +1,89 @@
+name: Release
+
+# Run by hand (Actions > Release > Run workflow). Builds the chosen commit, usually the newest pre-release, with the next
+# real version and creates a DRAFT release with GitHub's generated notes as a starting point. Edit the text on GitHub
+# and click "Publish release" yourself; GitHub then creates the tag. Pre-releases are kept. Versions come from git tags
+# only, see scripts/release-version.mts and arc42 §8.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump relative to the last release (ignored before the first release, which is always 0.0.1)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      ref:
+        description: Commit on main to release. Empty means the commit of the newest pre-release.
+        type: string
+        required: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build and create the draft release
+    if: github.ref == 'refs/heads/main' # run the workflow file from main only
+    runs-on: macos-latest
+    timeout-minutes: 60
+    # Optional protection: Settings > Environments > release > Required reviewers adds a confirmation step.
+    environment: release
+    permissions:
+      contents: write # create the draft release; nothing else
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # all tags and history, for the version number and the ancestry check
+      - name: Pick the commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_INPUT: ${{ inputs.ref }}
+        run: |
+          if [ -n "$REF_INPUT" ]; then
+            SHA="$(git rev-parse --verify "$REF_INPUT^{commit}")"
+          else
+            TAG="$(gh release list --limit 50 --json tagName,isPrerelease,isDraft --jq '[.[] | select(.isPrerelease and (.isDraft | not))][0].tagName // empty')"
+            SHA="$(if [ -n "$TAG" ]; then git rev-list -n 1 "$TAG"; else git rev-parse origin/main; fi)"
+          fi
+          git merge-base --is-ancestor "$SHA" origin/main || { echo "::error::$SHA is not on main"; exit 1; }
+          echo "SHA=$SHA" >> "$GITHUB_ENV"
+          echo "Releasing $SHA"
+      - run: git checkout --detach "$SHA"
+      - name: Pick the version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUMP: ${{ inputs.bump }}
+        run: |
+          VERSION="$(node scripts/release-version.mts release "$BUMP")"
+          if gh release list --limit 1000 --json tagName --jq '.[].tagName' | grep -qx "v$VERSION"; then
+            echo "::error::A release or draft v$VERSION exists already. Publish or delete it first."
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Version $VERSION"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Stamp the version into the build (not committed)
+        run: npm version "$VERSION" --no-git-tag-version
+      - run: npm run make:mac
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSETS="$(find out/make -type f \( -name '*.dmg' -o -name '*.zip' \))"
+          [ -n "$ASSETS" ] || { echo "::error::The build produced no DMG or zip"; exit 1; }
+          # shellcheck disable=SC2086 # asset paths contain no spaces
+          gh release create "v$VERSION" $ASSETS \
+            --target "$SHA" --title "Filey $VERSION" --draft --generate-notes
+          echo "Draft v$VERSION created. Edit the text and publish it: https://github.com/${{ github.repository }}/releases" >> "$GITHUB_STEP_SUMMARY"

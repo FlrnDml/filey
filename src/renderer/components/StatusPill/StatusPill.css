@@ -1,0 +1,49 @@
+.filey-status--filed {
+  color: var(--success);
+}
+
+.filey-status--working {
+  color: var(--accent);
+}
+
+.filey-status--waiting {
+  color: var(--warning);
+}
+
+.filey-status--failed {
+  color: var(--danger);
+}
+
+.filey-status--duplicate {
+  color: var(--warning);
+}
+
+.filey-status-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font: var(--type-label);
+  white-space: nowrap;
+}
+
+.filey-status-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+.filey-status-dot {
+  position: relative;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}

@@ -1,0 +1,40 @@
+.filey-history-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 48px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text);
+}
+
+.filey-history-row__icon {
+  color: var(--text-muted);
+}
+
+.filey-history-row:hover,
+.filey-history-row--selected {
+  background: var(--accent-subtle);
+}
+
+.filey-history-row:hover .filey-history-row__icon,
+.filey-history-row--selected .filey-history-row__icon {
+  color: var(--accent);
+}
+
+.filey-history-row__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.filey-history-row__name,
+.filey-history-row__detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filey-history-row__detail {
+  font: var(--type-small);
+  color: var(--text-muted);
+}

@@ -1,0 +1,50 @@
+.rule-editor {
+  width: min(560px, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+}
+
+.rule-editor::backdrop {
+  background: rgba(20, 23, 28, 0.4);
+}
+
+.rule-editor__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.rule-editor__title {
+  margin: 0;
+  font: var(--type-label);
+  overflow-wrap: anywhere;
+}
+
+.rule-editor__label {
+  font: var(--type-small);
+  color: var(--text-muted);
+}
+
+.rule-editor__text {
+  display: block;
+  width: 100%;
+  min-height: 200px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font: var(--type-body);
+  resize: vertical;
+}
+
+.rule-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

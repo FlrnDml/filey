@@ -1,0 +1,156 @@
+/* Menu-bar popover (docs/design-system/components/MenuBarPopover). Tokens only. */
+
+/*
+ * The window is transparent and exactly as large as this panel, so the panel draws the rounded
+ * outline. macOS draws the window shadow around it (shadow-md would be clipped by the window bounds).
+ * The max height matches POPOVER_HEIGHT.max in src/core/ipc.ts; the list scrolls beyond it.
+ */
+.popover {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 560px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.popover__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.popover__mark {
+  color: var(--accent);
+}
+
+.popover__title {
+  font: var(--type-body);
+  font-weight: 600;
+}
+
+.popover__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.popover__status::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+.popover__status--success {
+  color: var(--text-muted);
+}
+
+.popover__status--success::before {
+  background: var(--success);
+}
+
+.popover__status--warning {
+  color: var(--warning);
+}
+
+.popover__tabs,
+.popover__panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.popover__tabs > .filey-tabs__list {
+  flex: none;
+}
+
+.popover__search {
+  flex: none;
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.popover__notice {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.popover__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 var(--space-2) var(--space-2);
+  overflow-y: auto;
+}
+
+.popover__list:focus-visible {
+  outline-offset: -2px;
+}
+
+.popover__list .filey-history-row,
+.popover__list .filey-inbox-row__main {
+  cursor: default;
+}
+
+.popover__caption {
+  flex: none;
+  padding: 0 var(--space-4) var(--space-1);
+  color: var(--text-muted);
+}
+
+/* Empty inbox: centred, so the popover does not look broken when there is nothing to do. */
+.popover__clear {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-6) var(--space-8);
+  text-align: center;
+}
+
+.popover__clear-icon {
+  color: var(--success);
+}
+
+.popover__clear-text {
+  color: var(--text-muted);
+}
+
+.popover__empty {
+  flex: none;
+  padding: var(--space-2) var(--space-4) var(--space-4);
+  color: var(--text-muted);
+}
+
+.popover__message {
+  flex: none;
+  padding: 0 var(--space-4) var(--space-2);
+  color: var(--danger);
+}
+
+.popover__footer {
+  flex: none;
+  padding: var(--space-2);
+  border-top: 1px solid var(--border);
+}

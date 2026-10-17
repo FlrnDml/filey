@@ -1,0 +1,207 @@
+/* Settings window (docs/design-system/components/SettingsProvider, SettingsFiling). Tokens only. */
+
+.settings-screen__tabs {
+  padding-top: var(--space-3);
+}
+
+.settings-screen__panel {
+  padding: var(--space-6);
+}
+
+.settings-muted {
+  color: var(--text-muted);
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-field {
+  margin-bottom: var(--space-4);
+}
+
+.settings-label {
+  display: block;
+  margin: 0 0 var(--space-1);
+  font: var(--type-label);
+  color: var(--text);
+}
+
+.settings-hint {
+  margin-top: var(--space-1);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-row--actions {
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+/* One line per action result: words first, colour second. Empty while there is nothing to say. */
+.settings-feedback {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+}
+
+.settings-feedback:empty {
+  margin: 0;
+}
+
+.settings-feedback--success {
+  color: var(--success);
+}
+
+.settings-feedback--error {
+  color: var(--danger);
+}
+
+.settings-feedback--warning {
+  color: var(--warning);
+}
+
+/* Under a checkbox: aligned with its label (18px box + space-2 gap). */
+.settings-feedback--indented {
+  padding-left: calc(18px + var(--space-2));
+}
+
+.settings-error {
+  margin-top: var(--space-1);
+  color: var(--danger);
+}
+
+.settings-warning {
+  margin-top: var(--space-1);
+  color: var(--warning);
+}
+
+/* An inline confirmation instead of a native dialog (destructive or risky actions). */
+.settings-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.settings-confirm--warning {
+  border-color: var(--warning);
+}
+
+/* Provider tab */
+
+.settings-test-result {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.settings-test-result--ok {
+  color: var(--success);
+}
+
+.settings-test-result--failed {
+  color: var(--danger);
+}
+
+.settings-privacy {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+/* Filing tab */
+
+.settings-path {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 var(--space-3);
+  overflow: hidden;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  line-height: 34px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.settings-path--invalid {
+  border-color: var(--danger);
+}
+
+.settings-preview {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.settings-rules {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.settings-rule {
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.settings-rule:first-child {
+  border-top: 0;
+}
+
+.settings-rule__fields {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-rule__folder {
+  flex: none;
+  width: 210px;
+}
+
+.settings-rule__folder--fixed {
+  padding: 0 var(--space-3);
+}
+
+.settings-rule__description {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Descriptions are sentences: small type as in the SettingsFiling preview. */
+.settings-rule__description .filey-input {
+  font: var(--type-small);
+}
+
+.settings-rule__required {
+  flex: none;
+  /* Same width as the small Remove button, so the description fields line up. */
+  min-width: 76px;
+  text-align: center;
+}
+
+.settings-rule--invalid .filey-input {
+  border-color: var(--danger);
+}
+
+.settings-footer {
+  margin-top: var(--space-2);
+}

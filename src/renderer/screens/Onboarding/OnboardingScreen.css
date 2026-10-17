@@ -1,0 +1,109 @@
+/* First-launch window (docs/design-system/components/Onboarding). One step fills the window. */
+.onboarding {
+  display: flex;
+  min-height: 100vh;
+}
+
+.onboarding__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: var(--space-6);
+}
+
+.onboarding__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.onboarding__step {
+  margin-bottom: var(--space-2);
+  color: var(--text-muted);
+}
+
+.onboarding__title {
+  margin-bottom: var(--space-2);
+}
+
+.onboarding__intro {
+  margin-bottom: var(--space-4);
+  color: var(--text-muted);
+}
+
+.onboarding__field {
+  margin-bottom: var(--space-4);
+}
+
+/* The step's primary button sits at the bottom of the window. */
+.onboarding__push {
+  margin-top: auto;
+}
+
+.onboarding__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.onboarding__grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.onboarding__hint {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+}
+
+.onboarding__error {
+  margin-top: var(--space-2);
+  color: var(--danger);
+}
+
+.onboarding__menubar {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+/* Where scans go (step 3). */
+.onboarding__folders {
+  margin-bottom: var(--space-4);
+}
+
+.onboarding__paths {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+}
+
+.onboarding__paths dd {
+  margin: 0 0 var(--space-2);
+}
+
+.onboarding__path {
+  overflow-wrap: anywhere;
+}
+
+.onboarding__folders-action {
+  margin-top: var(--space-3);
+}
+
+/* The menu-bar item as macOS highlights it (TrayIcon "popover open"). */
+.onboarding__glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-subtle);
+  color: var(--accent);
+}

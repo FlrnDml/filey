@@ -1,0 +1,32 @@
+<!-- @dsCard group="Settings" height=640 subtitle="Folders, naming template, folder rules" -->
+<style>html,body{margin:0}body{background:var(--surface);color:var(--text);font:400 15px/22px var(--font-sans);padding:var(--space-6);box-sizing:border-box}
+*{box-sizing:border-box}svg.i{flex:none;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.win{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);overflow:hidden}
+.tb{height:44px;display:flex;align-items:center;gap:8px;padding:0 var(--space-4)}.tl{width:12px;height:12px;border-radius:50%}.tr{background:#ff5f57}.ty{background:#febc2e}.tg{background:#28c840}
+.tabs{display:flex;gap:var(--space-1);padding:0 var(--space-4) var(--space-3);border-bottom:1px solid var(--border)}
+.tab{display:flex;align-items:center;gap:6px;height:28px;padding:0 var(--space-3);border-radius:var(--radius-md);font:500 13px/16px var(--font-sans);color:var(--text-muted)}.tab.on{background:var(--accent-subtle);color:var(--accent)}
+.body{padding:var(--space-6)}.f{margin-bottom:var(--space-4)}
+label,.lb{display:block;font:500 13px/16px var(--font-sans);margin-bottom:var(--space-1)}
+.in{width:100%;height:36px;padding:0 var(--space-3);border:1px solid var(--border-control);border-radius:var(--radius-md);background:var(--bg);color:var(--text);font:400 15px var(--font-sans)}.in:focus-visible,.btn:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.mono{font-family:var(--font-mono);font-size:13px}.hint{font:400 13px/18px var(--font-sans);color:var(--text-muted);margin-top:var(--space-1)}
+.row{display:flex;align-items:center;gap:var(--space-2)}.grow{flex:1;min-width:0}
+.btn{font:500 13px/16px var(--font-sans);height:36px;padding:0 var(--space-4);border-radius:var(--radius-md);cursor:pointer;border:1px solid var(--border-control);background:var(--bg);color:var(--text)}.btn.p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.ok{color:var(--success)}.bad{color:var(--danger)}.mut{color:var(--text-muted)}.sm{font:400 13px/18px var(--font-sans)}
+.win{width:620px;margin:0 auto}.rules{border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden}
+.rl{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);border-top:1px solid var(--border)}.rl:first-child{border-top:0}.rl .fo{width:190px;flex:none}
+.pv{background:var(--surface);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);margin-top:var(--space-2)}</style><svg width="0" height="0" style="position:absolute"><defs><symbol id="scan" viewBox="0 0 20 20"><path d="M2.5 11.5h15v4a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5z M4.5 11.5 6 4.5h8l1.5 7 M14.5 14.2h.01"/></symbol><symbol id="doc" viewBox="0 0 20 20"><path d="M5 2.5h6l4 4v11H5z M11 2.5v4h4"/></symbol><symbol id="gear" viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.5"/><path d="M10 2.5v2 M10 15.5v2 M2.5 10h2 M15.5 10h2 M4.7 4.7l1.4 1.4 M13.9 13.9l1.4 1.4 M4.7 15.3l1.4-1.4 M13.9 6.1l1.4-1.4"/></symbol><symbol id="key" viewBox="0 0 20 20"><circle cx="7" cy="10" r="3.5"/><path d="M10.5 10h7 M15 10v3"/></symbol><symbol id="folder" viewBox="0 0 20 20"><path d="M2.5 5h5l1.5 2h8.5v9h-15z"/></symbol></defs></svg>
+<div class="win">
+<div class="tb"><i class="tl tr"></i><i class="tl ty"></i><i class="tl tg"></i></div>
+<div class="tabs"><span class="tab"><svg class="i" width="16" height="16"><use href="#gear"/></svg>General</span><span class="tab"><svg class="i" width="16" height="16"><use href="#key"/></svg>Provider</span><span class="tab on"><svg class="i" width="16" height="16"><use href="#folder"/></svg>Filing</span></div>
+<div class="body">
+<div class="f"><div class="lb">Inbox folder</div><div class="row"><div class="in mono row grow" style="overflow:hidden">iCloud Drive/Documents/Inbox</div><button class="btn">Choose…</button></div></div>
+<div class="f"><div class="lb">Target folder</div><div class="row"><div class="in mono row grow" style="overflow:hidden">iCloud Drive/Documents</div><button class="btn">Choose…</button></div><div class="hint">Must not be inside the inbox.</div></div>
+<div class="f"><label for="t">Naming template</label><input id="t" class="in mono" value="{category}/{date}_{sender}_{title}.pdf"><div class="pv mono">Health/Health insurance/2026-03-12_Northwind_Invoice.pdf</div></div>
+<div class="lb">Folder rules</div>
+<div class="rules">
+<div class="rl"><span class="fo mono">Insurance/Car</span><span class="grow sm mut">Everything about my car insurance, including contract, invoices and claims</span></div>
+<div class="rl"><span class="fo mono">Health/Health insurance</span><span class="grow sm mut">Letters from my health insurer</span></div>
+<div class="rl"><span class="fo mono">Unsorted</span><span class="grow sm mut">Fallback when nothing matches</span><span class="sm mut">Required</span></div>
+</div>
+<div class="row" style="margin-top:var(--space-3)"><button class="btn">Add rule</button><span class="hint" style="margin:0">Changes apply to the next import only.</span></div>
+</div></div>

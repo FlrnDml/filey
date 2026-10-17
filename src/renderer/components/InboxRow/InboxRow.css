@@ -1,0 +1,99 @@
+.filey-inbox-row {
+  border-radius: var(--radius-md);
+  color: var(--text);
+}
+
+.filey-inbox-row--selected {
+  background: var(--accent-subtle);
+}
+
+.filey-inbox-row__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 48px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+}
+
+.filey-inbox-row__main:hover {
+  background: var(--accent-subtle);
+}
+
+.filey-inbox-row__icon {
+  color: var(--text-muted);
+}
+
+.filey-inbox-row:hover .filey-inbox-row__icon,
+.filey-inbox-row--selected .filey-inbox-row__icon {
+  color: var(--accent);
+}
+
+.filey-inbox-row__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.filey-inbox-row__name,
+.filey-inbox-row__detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filey-inbox-row__detail {
+  font: var(--type-small);
+  color: var(--text-muted);
+}
+
+.filey-inbox-row__detail--failed {
+  color: var(--danger);
+}
+
+.filey-inbox-row__detail--duplicate {
+  color: var(--warning);
+}
+
+.filey-inbox-row__detail--working {
+  color: var(--accent);
+}
+
+.filey-inbox-row__pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  font: var(--type-label);
+  white-space: nowrap;
+}
+
+.filey-inbox-row__pill--failed {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.filey-inbox-row__pill--duplicate {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.filey-inbox-row__pill--working {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/*
+ * Indented to the text: row padding + icon + gap. One button per line, all as wide as the widest one, so the
+ * strip lines up the same way for every state instead of wrapping unevenly.
+ */
+.filey-inbox-row__actions {
+  display: grid;
+  grid-template-columns: max-content;
+  gap: var(--space-1);
+  padding: 0 var(--space-2) var(--space-2) calc(var(--space-3) + 20px + var(--space-3));
+}

@@ -1,0 +1,42 @@
+.filey-file-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 40px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text);
+}
+
+.filey-file-row:hover {
+  background: var(--surface);
+}
+
+.filey-file-row--selected,
+.filey-file-row--selected:hover {
+  background: var(--accent-subtle);
+}
+
+.filey-file-row__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.filey-file-row--selected .filey-file-row__icon {
+  color: var(--accent);
+}
+
+.filey-file-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filey-file-row__meta {
+  flex: none;
+  font: var(--type-small);
+  color: var(--text-muted);
+}

@@ -1,0 +1,17 @@
+{
+  "note": "Health insurer letter with a short sender name",
+  "date": "2026-03-12",
+  "sender": "Nordlicht",
+  "senderAlternatives": [
+    "Nordlicht Krankenkasse",
+    "NK"
+  ],
+  "category": "Health/Health insurance",
+  "titleKeywords": [
+    "beitrag",
+    "bescheinigung",
+    "premium",
+    "contribution",
+    "certificate"
+  ]
+}

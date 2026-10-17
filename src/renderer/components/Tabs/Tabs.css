@@ -1,0 +1,78 @@
+.filey-tabs__list {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.filey-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font: var(--type-label);
+  cursor: pointer;
+}
+
+.filey-tabs__tab:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.filey-tabs__tab--selected,
+.filey-tabs__tab--selected:hover {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/* The panel is focusable (WAI-ARIA tabs pattern); inset its ring so a window edge cannot clip it. */
+.filey-tabs__panel:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Segmented: a full-width switch between views, two or more equal segments on a surface track. */
+.filey-tabs--segmented > .filey-tabs__list {
+  gap: 2px;
+  margin: 0 var(--space-3) var(--space-2);
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.filey-tabs--segmented .filey-tabs__tab {
+  flex: 1;
+  justify-content: center;
+  padding: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+}
+
+.filey-tabs--segmented .filey-tabs__tab:hover {
+  background: transparent;
+  color: var(--text);
+}
+
+.filey-tabs--segmented .filey-tabs__tab--selected,
+.filey-tabs--segmented .filey-tabs__tab--selected:hover {
+  background: var(--bg);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+}
+
+.filey-tabs__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--warning);
+  color: var(--on-accent);
+  font: 600 11px/18px var(--font-sans);
+}

@@ -1,0 +1,56 @@
+.filey-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.filey-checkbox__input {
+  appearance: none;
+  flex: none;
+  display: inline-grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+/* The check mark: the same glyph as Icon "check", drawn with borders so it follows the theme. */
+.filey-checkbox__input::before {
+  content: '';
+  width: 10px;
+  height: 5px;
+  margin-top: -2px;
+  border-left: 1.5px solid var(--on-accent);
+  border-bottom: 1.5px solid var(--on-accent);
+  transform: rotate(-45deg) scale(0);
+}
+
+.filey-checkbox__input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.filey-checkbox__input:checked::before {
+  transform: rotate(-45deg) scale(1);
+}
+
+.filey-checkbox__input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.filey-checkbox__label {
+  display: block;
+  font: var(--type-label);
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.filey-checkbox__hint {
+  font: var(--type-small);
+  color: var(--text-muted);
+}

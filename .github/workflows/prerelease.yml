@@ -1,0 +1,59 @@
+name: Pre-release
+
+# Every push to main (that changes more than docs) becomes a pre-release `vX.Y.Z-prerelease.N` with the universal
+# DMG and zip, no release text. All pre-releases are kept. The "Release" workflow turns one into a real release.
+# Versions come from git tags only, see scripts/release-version.mts and arc42 §8.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/pull_request_template.md'
+
+# One release job at a time across both workflows, so pre-release numbers never collide.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and publish the pre-release
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # create the release and its tag; nothing else
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # all tags, for the version number
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Stamp the version into the build (not committed)
+        run: |
+          VERSION="$(node scripts/release-version.mts prerelease)"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          npm version "$VERSION" --no-git-tag-version
+      - run: npm run make:mac
+      - name: Create the pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSETS="$(find out/make -type f \( -name '*.dmg' -o -name '*.zip' \))"
+          [ -n "$ASSETS" ] || { echo "::error::The build produced no DMG or zip"; exit 1; }
+          # shellcheck disable=SC2086 # asset paths contain no spaces
+          gh release create "v$VERSION" $ASSETS \
+            --target "$GITHUB_SHA" --title "Filey $VERSION" --prerelease --notes ""

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Content-Security-Policy for every Filey window (development and production).
+      - Scripts only from the app itself: no inline scripts, no eval (the dev build uses a non-eval
+        source map, see webpack.renderer.config.ts).
+      - style-src allows 'unsafe-inline' only because style-loader injects the bundled CSS as <style>
+        elements at runtime. The CSS itself comes from the bundle; nothing user-provided is styled inline.
+      - connect-src 'self' covers the dev server's hot-reload socket (same origin); the app makes no
+        network requests from the renderer (all I/O runs in main, arc42 §8).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
+    />
+    <title>Filey</title>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

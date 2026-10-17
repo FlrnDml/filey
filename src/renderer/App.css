@@ -1,0 +1,15 @@
+/* The popover window is transparent: only its rounded panel is drawn (screens/Popover/Popover.css). */
+html[data-surface='popover'],
+html[data-surface='popover'] body {
+  background: transparent;
+}
+
+/* No scrollbars on the popover window itself; its list scrolls. */
+html[data-surface='popover'] body {
+  overflow: hidden;
+}
+
+.app-unknown {
+  padding: var(--space-8);
+  color: var(--text-muted);
+}
