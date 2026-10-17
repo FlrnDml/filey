@@ -1,9 +1,5 @@
 # Security policy
 
-## Supported versions
-
-Filey is early software (0.x). Security fixes go into the latest release only.
-
 ## Reporting a vulnerability
 
 Please report vulnerabilities **privately**, not in a public issue or pull request:
@@ -11,18 +7,7 @@ Please report vulnerabilities **privately**, not in a public issue or pull reque
 1. Go to the [Security tab](https://github.com/FlrnDml/filey/security) of this repository.
 2. Choose **Report a vulnerability** and describe the problem: what you found, how to reproduce it and what an attacker could do.
 
-You will get a reply as soon as the maintainer can; Filey is a spare-time project, so please be patient. Once a fix is
-released, the advisory is published and you are credited if you wish.
-
-## What is in scope
-
-- The Filey app: the main process, the preload bridge, the renderer, and how it handles files, paths, the API key and the
-  data it sends out.
-- Anything that lets a scanned document, its text or its file name run code, read or write files outside the inbox and
-  target folders, or leak the API key.
-
-Not in scope: vulnerabilities in OpenRouter or in the model providers behind it (report those to them), and issues that need
-an attacker who already has full access to your Mac or your OpenRouter account.
+You will get a reply as soon as the maintainer can; Filey is a spare-time project, so please be patient.
 
 ## Privacy
 
