@@ -115,7 +115,3 @@ into the build (arc42 §8, "Versioning").
 - **Publish.** Open the draft on the releases page, write or edit the text explaining what is new, and click
   **Publish release**; GitHub then creates the tag. You can edit the text after publishing too. Download the DMG once to
   check it.
-
-Optional: under **Settings → Environments → release** add yourself as required reviewer, so the Release workflow waits
-for a confirmation. Both workflows use only the built-in `GITHUB_TOKEN` with `contents: write`; there is no personal token
-or secret to manage. Version logic lives in `scripts/release-version.mts`.
