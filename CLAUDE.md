@@ -6,6 +6,8 @@ Electron desktop app (Node.js).
 - Develop on the branch assigned to the session, commit with clear messages and push.
 - After every completed change, automatically open a pull request against `main`
   (do not wait to be asked). Fill in `.github/pull_request_template.md`.
+- Title pull requests (and name branches and commits) `feat:`, `fix:`, `docs:` or `chore:`.
+  See `.claude/rules/pull-request-titles.md`.
 - Do not merge pull requests yourself unless explicitly asked.
 - Before opening a PR, apply `.claude/rules/electron-pr-checks.md` (Electron security and
   performance best practices) to the diff.
