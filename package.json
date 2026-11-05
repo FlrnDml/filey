@@ -5,7 +5,7 @@
   },
   "main": ".webpack/main/index.cjs",
   "scripts": {
-    "start": "electron-forge start",
+    "start": "FILEY_DEV_VERSION=0.0.0-dev electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "make:mac": "electron-forge make --platform=darwin --arch=universal",

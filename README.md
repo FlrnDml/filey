@@ -12,7 +12,12 @@
 > **Early software (0.x).** Filey works end to end, but features and settings can still change, and the app is not signed or
 > notarized yet (see [Install](#install)). Bug reports and ideas are welcome.
 
-Filey is a macOS menu-bar app that files your scanned letters for you. Scan a letter with your iPhone, save the PDF to an inbox folder in iCloud Drive, and Filey reads it with the AI model of your choice (through your own [OpenRouter](https://openrouter.ai) key), names it like `Health/Health insurance/2026-10-15_TK_Premium notice.pdf` and moves it into the right folder. The content of each scan is sent to OpenRouter and the model provider, nothing else leaves your Mac; see [Privacy](SECURITY.md#privacy).
+Filey is a macOS menu-bar app that files your scanned letters for you: 
+1. Scan a letter with your iPhone
+2. Save the PDF to an inbox folder in iCloud Drive
+3. Filey reads it with the AI model of your choice (through your own [OpenRouter](https://openrouter.ai) key), names it like `Health/Health insurance/2026-10-15_TK_Premium notice.pdf` and moves it into the right folder. 
+
+The content of each scan is sent to OpenRouter and the model provider, nothing else leaves your Mac; see [Privacy](SECURITY.md#privacy).
 
 ```
 iPhone scan ──▶ iCloud Drive inbox ──▶ Filey reads it (OpenRouter) ──▶ renamed and moved into your folder tree
@@ -117,9 +122,3 @@ After an update, Filey may ask for your API key again (see [Known limitations](#
 - **Show logs:** right-click the menu-bar icon → Show logs, or Settings → General → Show logs. This opens `~/Library/Logs/Filey/filey.log` in your default log viewer (usually Console). The file is rotated at 1 MB; `filey.1.log` and `filey.2.log` hold the older lines.
 - **Debug logging:** Settings → General → Debug logging adds more detail to the log. Logs contain file names, hashes, status and errors, never your key or document contents.
 - **"Test connection" fails:** the message says whether OpenRouter rejected the key, does not know the model, the model could not read the sample scan or returned no structured result, or OpenRouter could not be reached. If in doubt, try the default model.
-
-## Contributing and security
-
-Want to report a bug, suggest an idea or help build Filey? See [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
-
-Filey is an independent project. It is not affiliated with, endorsed by or sponsored by Apple, OpenRouter or Google. Apple, macOS, iCloud, iPhone and Finder are trademarks of Apple Inc.; OpenRouter and Google are the names of their respective owners. They are used here only to say what Filey works with. Filey is released under the [MIT License](LICENSE).

@@ -40,6 +40,15 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   hooks: {
     /**
+     * `electron-forge start` refuses to run without a `version`, but package.json has none on purpose (arc42 §8,
+     * "Versioning"). `npm start` sets FILEY_DEV_VERSION, so only the development run gets a placeholder version;
+     * `package` and `make` stay unversioned and CI keeps stamping the real version.
+     */
+    readPackageJson: async (_forgeConfig, packageJson) =>
+      packageJson.version || !process.env.FILEY_DEV_VERSION
+        ? packageJson
+        : { ...packageJson, version: process.env.FILEY_DEV_VERSION },
+    /**
      * Ad-hoc signs the finished .app (no identity, so still "unsigned" for Gatekeeper). Apple Silicon refuses to
      * run code without a valid signature, and packaging (Info.plist changes, fuses, the universal merge) breaks
      * the one Electron ships with. With a valid ad-hoc signature a downloaded Filey gets the usual "Open Anyway"
