@@ -1,7 +1,6 @@
 # Contributing to Filey
 
-Thanks for your interest in Filey! Bug reports, ideas and pull requests are welcome. Please be respectful and patient, and
-keep issues and pull requests on topic.
+Thanks for your interest in Filey! Bug reports, ideas and pull requests are welcome. Please be respectful and patient, and keep issues and pull requests on topic.
 
 ## Before you start
 
@@ -14,30 +13,15 @@ keep issues and pull requests on topic.
 - **Language:** English only for the app, code, comments, documentation, issues, pull requests and commit messages.
   Scanned documents themselves can be in any language.
 
-## Tech stack and layout
-
-Electron 44 with Electron Forge 8 (Webpack), TypeScript, React and Vitest. [docs/arc42.md](docs/arc42.md) describes the
-architecture and [docs/design-system](docs/design-system/README.md) the UI.
-
-| Folder | Purpose |
-| --- | --- |
-| `src/main/` | Main process: tray, windows, IPC handlers (`ipc/`), Electron adapters (`adapters/`). All I/O and AI calls live here. |
-| `src/preload/` | Preload script: exposes the typed `window.filey` API through `contextBridge`. |
-| `src/renderer/` | React UI. No Node access; talks to the main process only through `window.filey`. |
-| `src/core/` | Pure logic and the shared IPC contract (`ipc.ts`). Must not import Electron (ESLint enforces this); Electron features are reached through the ports in `core/ports/`, so tests pass fakes. |
-
-Tests live next to the code as `*.test.ts(x)`. Tests that use `node:sqlite` need Node 24 (see `.nvmrc`).
-
 ## Set up
 
-Requirements: Node 24.22.0 (the pinned LTS in `.nvmrc`; `nvm use` or `fnm use` picks it) and npm. Linting and the unit tests also run on Linux and in CI;
-starting the app and building a DMG need a Mac.
+Requirements: Node 24.22.0 (the pinned LTS in `.nvmrc`). Starting the app and building a DMG need a Mac.
 
 ```sh
-npm ci                  # headless/CI: ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
+npm ci                  
 npm run lint
 npm run typecheck
-npm test                # unit tests in plain Node and jsdom, no Electron needed
+npm test                
 ```
 
 Other scripts:
@@ -56,12 +40,9 @@ On a Mac, after `npm ci` (the first start downloads the Electron binary):
 npm start
 ```
 
-This is `electron-forge start`: Webpack builds the main process, the preload script and the renderer, and opens Filey.
-Renderer changes are picked up live. After changes to `src/main/` or `src/preload/`, type `rs` and Return in the terminal to
-restart the app. Stop it with Ctrl+C in the terminal.
+This is `electron-forge start`: Webpack builds the main process, the preload script and the renderer, and opens Filey. Renderer changes are picked up live.
 
-- Filey is a menu-bar app: look for its icon in the menu bar, there is no Dock icon. The first launch shows the
-  onboarding window (paste your OpenRouter key and choose the folders).
+- Filey is a menu-bar app: look for its icon in the menu bar, there is no Dock icon. The first launch shows the onboarding window (paste your OpenRouter key and choose the folders).
 - The main process logs to the terminal and to `~/Library/Logs/Filey/filey.log`.
 - Quit an installed copy of Filey before you start the development version, so that the two do not watch the same inbox.
 
