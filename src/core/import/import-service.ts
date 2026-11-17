@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
+import type { ModelConfig } from '../analyzer';
 import type { ProcessedImport, UnprocessedImport, UnprocessedStatus } from '../db';
 import { fileDocument, renderPath } from '../filer';
 import type { ImportOutcome, ImportService, ImportServiceDeps, ImportState, InboxChange, HistoryChange } from './types';
@@ -24,7 +25,7 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 const isCode = (err: unknown, code: string) => (err as { code?: string } | null)?.code === code;
 
 export function createImportService(deps: ImportServiceDeps): ImportService {
-  const { imports, settings, apiKeys, fs, notifier, logger, clock, connectivity, scheduler } = deps;
+  const { imports, settings, apiKeys, fs, notifier, logger, clock, connectivity, localServer, scheduler } = deps;
 
   let state: ImportState = { mode: 'running' };
   const stateListeners = new Set<(s: ImportState) => void>();
@@ -109,15 +110,41 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
   function enterOffline() {
     if (state.mode === 'offline') return;
     setState({ mode: 'offline' });
-    stopTimer ??= scheduler.every(OFFLINE_CHECK_INTERVAL_MS, checkConnection);
+    stopTimer ??= scheduler.every(OFFLINE_CHECK_INTERVAL_MS, () => void checkConnection());
   }
 
-  function checkConnection() {
-    if (state.mode !== 'offline' || !connectivity.isOnline()) return;
+  /** Whether the saved provider can be reached: the internet for OpenRouter, the local server for Ollama. */
+  async function providerReachable(): Promise<boolean> {
+    const config = settings.getSettings();
+    return config.provider === 'ollama' ? localServer.isReachable(config.ollamaUrl) : connectivity.isOnline();
+  }
+
+  function resumeFromOffline() {
     stopTimer?.();
     stopTimer = undefined;
     setState({ mode: 'running' });
     void serial(drainOfflineQueue);
+  }
+
+  /** Several triggers (timer, wake, a settings change) can ask at once; one check of the local server at a time is enough. */
+  let checking = false;
+  /** Leaves offline mode once the provider can be reached again. The OpenRouter branch is synchronous on purpose: no awaits before it acts. */
+  async function checkConnection(): Promise<void> {
+    if (state.mode !== 'offline') return;
+    const config = settings.getSettings();
+    if (config.provider !== 'ollama') {
+      if (connectivity.isOnline()) resumeFromOffline();
+      return;
+    }
+    if (checking) return;
+    checking = true;
+    let reachable: boolean;
+    try {
+      reachable = await localServer.isReachable(config.ollamaUrl);
+    } finally {
+      checking = false;
+    }
+    if (reachable && state.mode === 'offline') resumeFromOffline();
   }
 
   async function drainOfflineQueue() {
@@ -142,12 +169,20 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     }
   }
 
-  /** Returns the key, or pauses and returns undefined. */
-  async function usableKey(): Promise<string | undefined> {
+  /**
+   * Provider, model and (OpenRouter) key from the settings and the Keychain, or pauses and returns undefined when the
+   * OpenRouter key is missing or unreadable. Ollama needs no key, so it never pauses.
+   */
+  async function usableConfig(): Promise<ModelConfig | undefined> {
+    const config = settings.getSettings();
+    if (config.provider === 'ollama') {
+      resumeFromPause();
+      return { provider: 'ollama', baseUrl: config.ollamaUrl, model: config.ollamaModel };
+    }
     const key = await apiKeys.get();
     if (key.status === 'ok') {
       resumeFromPause();
-      return key.value;
+      return { provider: 'openrouter', apiKey: key.value, model: config.model };
     }
     setState({ mode: 'paused', reason: key.status });
     return undefined;
@@ -155,8 +190,8 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
 
   async function importFile(filePath: string, { draining, manual }: RunOptions): Promise<ImportOutcome> {
     const name = path.basename(filePath);
-    const apiKey = await usableKey();
-    if (apiKey === undefined) {
+    const modelConfig = await usableConfig();
+    if (modelConfig === undefined) {
       addUnique(paused, filePath);
       logger.log('warn', `Import: ${name} kept in the inbox, the API key is not usable`);
       return 'paused';
@@ -208,22 +243,18 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     // Visible in the Inbox view before the analysis starts.
     const row = ensurePending(existing, base);
 
-    if (!draining && (state.mode === 'offline' || !connectivity.isOnline())) {
+    if (!draining && (state.mode === 'offline' || !(await providerReachable()))) {
       return queue(base, shortHash);
     }
 
     const config = settings.getSettings();
     setAnalyzing(row.id);
     try {
-      const result = await deps.analyze(data, {
-        apiKey,
-        model: config.model,
-        rules: settings.listRules(),
-      });
+      const result = await deps.analyze(data, { config: modelConfig, rules: settings.listRules() });
       if (!result.ok) {
         const { kind, message } = result.failure;
-        // A timeout counts as offline only when the Mac has no connection; otherwise retrying would hang again.
-        if (kind === 'offline' || (kind === 'timeout' && !connectivity.isOnline())) return queue(base, shortHash);
+        // A timeout counts as offline only when the provider cannot be reached; otherwise retrying would hang again.
+        if (kind === 'offline' || (kind === 'timeout' && !(await providerReachable()))) return queue(base, shortHash);
         return fail(base, shortHash, message, kind);
       }
 
@@ -244,7 +275,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
         sender: result.info.sender,
         category: result.info.category,
         title: result.info.title,
-        model: config.model,
+        model: modelConfig.model,
         filedAt: now(),
       });
       inboxChanged({ kind: 'remove', id: row.id });
@@ -288,7 +319,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     addUnique(offlineQueue, base.filePath);
     if (offlineQueue.length !== before) queueChanged();
     enterOffline();
-    logger.log('info', `Import: ${base.fileName} (${shortHash}) is waiting for the connection`);
+    logger.log('info', `Import: ${base.fileName} (${shortHash}) is waiting for the ${settings.getSettings().provider === 'ollama' ? 'Ollama server' : 'connection'}`);
     return 'queued';
   }
 
@@ -335,6 +366,8 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     start() {
       disposers.push(
         apiKeys.onStatusChange((status) => {
+          // Ollama needs no key: a key that appears, disappears or becomes unreadable changes nothing for it.
+          if (settings.getSettings().provider === 'ollama') return;
           if (status === 'set') {
             resumeFromPause();
             void serial(drainPaused);
@@ -342,7 +375,7 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
             setState({ mode: 'paused', reason: status });
           }
         }),
-        connectivity.onChange(checkConnection),
+        connectivity.onChange(() => void checkConnection()),
       );
     },
     stop() {
@@ -392,11 +425,21 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     async checkKey() {
       await serial(async () => {
         try {
-          await usableKey();
+          await usableConfig();
         } catch (err) {
           logger.log('error', `Import: could not check the API key: ${errorText(err)}`);
         }
       });
+    },
+    async providerChanged() {
+      try {
+        await serial(async () => {
+          if (await usableConfig()) await drainPaused();
+        });
+        await checkConnection();
+      } catch (err) {
+        logger.log('error', `Import: could not apply the provider settings: ${errorText(err)}`);
+      }
     },
   };
 }

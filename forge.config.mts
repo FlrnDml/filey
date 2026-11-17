@@ -84,6 +84,15 @@ const config: ForgeConfig = {
               js: './src/preload/index.ts',
             },
           },
+          // Hidden window that renders PDF pages to images for Ollama (arc42 §5.3); never shown.
+          {
+            html: './src/pdf-renderer/index.html',
+            js: './src/pdf-renderer/index.ts',
+            name: 'pdf_renderer',
+            preload: {
+              js: './src/pdf-renderer/preload.ts',
+            },
+          },
         ],
       },
     }),

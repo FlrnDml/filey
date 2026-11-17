@@ -21,9 +21,25 @@ import type { ConnectionTestInput, ConnectionTestResult } from './connection-tes
 import type { FolderSetup } from './folders/types';
 import type { HistoryRow, InboxRow, InboxStatus } from './history/types';
 import type { ImportState, RetryResult } from './import/types';
+import type { OllamaPullProgress, OllamaPullResult, OllamaStatus } from './ollama/types';
 import type { FolderRule, Settings, SettingsErrorField } from './settings';
 
-export type { ApiKeyStatus, ConnectionTestInput, ConnectionTestResult, FolderRule, FolderSetup, HistoryRow, InboxRow, InboxStatus, RetryResult, Settings, SettingsErrorField };
+export type {
+  ApiKeyStatus,
+  ConnectionTestInput,
+  ConnectionTestResult,
+  FolderRule,
+  FolderSetup,
+  HistoryRow,
+  InboxRow,
+  InboxStatus,
+  OllamaPullProgress,
+  OllamaPullResult,
+  OllamaStatus,
+  RetryResult,
+  Settings,
+  SettingsErrorField,
+};
 export type { ConnectionTestReason } from './connection-test';
 
 /** Channel names, shared by both sides so they cannot drift apart. */
@@ -53,6 +69,13 @@ export const IPC_CHANNELS = {
   connection: {
     test: 'connection:test',
   },
+  ollama: {
+    status: 'ollama:status',
+    pull: 'ollama:pull',
+    cancelPull: 'ollama:cancel-pull',
+    openDownloadPage: 'ollama:open-download-page',
+    pullProgress: 'ollama:pull-progress',
+  },
   inbox: {
     list: 'inbox:list',
     retry: 'inbox:retry',
@@ -81,7 +104,7 @@ export const IPC_CHANNELS = {
 } as const;
 
 /** Settings the renderer may change with `settings.update`. Autostart and onboarding have their own methods. */
-export const EDITABLE_SETTINGS = ['model', 'inboxPath', 'targetPath', 'namingTemplate', 'debugLogging'] as const;
+export const EDITABLE_SETTINGS = ['provider', 'model', 'ollamaUrl', 'ollamaModel', 'inboxPath', 'targetPath', 'namingTemplate', 'debugLogging'] as const;
 export type EditableSetting = (typeof EDITABLE_SETTINGS)[number];
 export type SettingsPatch = Partial<Pick<Settings, EditableSetting>>;
 
@@ -160,6 +183,11 @@ export interface InvokeContract {
 
   [IPC_CHANNELS.connection.test]: { args: [input: ConnectionTestInput]; result: ConnectionTestResult };
 
+  [IPC_CHANNELS.ollama.status]: { args: []; result: OllamaStatus };
+  [IPC_CHANNELS.ollama.pull]: { args: [model: string]; result: OllamaPullResult };
+  [IPC_CHANNELS.ollama.cancelPull]: { args: []; result: void };
+  [IPC_CHANNELS.ollama.openDownloadPage]: { args: []; result: void };
+
   [IPC_CHANNELS.inbox.list]: { args: []; result: InboxRow[] };
   [IPC_CHANNELS.inbox.retry]: { args: [id: number]; result: RetryResult };
   [IPC_CHANNELS.inbox.moveToTrash]: { args: [id: number]; result: TrashResult };
@@ -190,6 +218,8 @@ export interface EventContract {
   [IPC_CHANNELS.state.changed]: AppState;
   /** Settings were saved (from any window). */
   [IPC_CHANNELS.settings.changed]: Settings;
+  /** Progress of the running Ollama model download (at most a few updates per second). */
+  [IPC_CHANNELS.ollama.pullProgress]: OllamaPullProgress;
 }
 
 export type EventChannel = keyof EventContract;
@@ -236,6 +266,16 @@ export interface FileyApi {
   connection: {
     /** Runs the analysis on the bundled sample scan; `key`/`model` default to the saved ones. */
     test(input?: ConnectionTestInput): Promise<ConnectionTestResult>;
+  };
+  ollama: {
+    /** Asks the saved Ollama address whether Ollama runs and which models are installed. Never rejects for an unreachable server. */
+    status(): Promise<OllamaStatus>;
+    /** Downloads a model; resolves when it finished, failed or was cancelled. Progress arrives via `onPullProgress`. */
+    pull(model: string): Promise<OllamaPullResult>;
+    cancelPull(): Promise<void>;
+    /** Opens ollama.com/download in the browser. Main opens a fixed address; the renderer cannot choose one. */
+    openDownloadPage(): Promise<void>;
+    onPullProgress(listener: Listener<typeof IPC_CHANNELS.ollama.pullProgress>): Unsubscribe;
   };
   inbox: {
     /** Files still in the inbox (pending, failed, duplicate), newest first. */

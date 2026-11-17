@@ -42,7 +42,7 @@ npm start
 
 This is `electron-forge start`: Webpack builds the main process, the preload script and the renderer, and opens Filey. Renderer changes are picked up live.
 
-- Filey is a menu-bar app: look for its icon in the menu bar, there is no Dock icon. The first launch shows the onboarding window (paste your OpenRouter key and choose the folders).
+- Filey is a menu-bar app: look for its icon in the menu bar, there is no Dock icon. The first launch shows the onboarding window (choose OpenRouter and paste your key, or choose Ollama and download a model; the folders are created for you).
 - The main process logs to the terminal and to `~/Library/Logs/Filey/filey.log`.
 - Quit an installed copy of Filey before you start the development version, so that the two do not watch the same inbox.
 

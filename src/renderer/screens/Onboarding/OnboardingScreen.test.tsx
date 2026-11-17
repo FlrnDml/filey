@@ -171,3 +171,70 @@ describe('Onboarding flow', () => {
     expect(document.querySelectorAll('.filey-button--primary')).toHaveLength(1);
   });
 });
+
+describe('Onboarding step 1: Ollama', () => {
+  const ollamaRadio = () => screen.getByRole('radio', { name: /Ollama/ });
+
+  it('offers both providers, with OpenRouter and its key field first', async () => {
+    setup();
+    expect(screen.getByRole('radio', { name: /OpenRouter/ })).toBeChecked();
+    expect(ollamaRadio()).not.toBeChecked();
+    await waitFor(() => expect(ollamaRadio()).toBeEnabled());
+  });
+
+  it('switches to Ollama: no key field, Ollama status and model, and Continue works without a key', async () => {
+    const { user, spies, api } = setup({ apiKeyStatus: 'missing' });
+    const update = vi.spyOn(api.settings, 'update');
+    await waitFor(() => expect(ollamaRadio()).toBeEnabled());
+    await user.click(ollamaRadio());
+    expect(update).toHaveBeenCalledExactlyOnceWith({ provider: 'ollama' });
+    expect(await screen.findByText(/Ollama 0.12.3 is running/)).toBeInTheDocument();
+    expect(screen.getByText(ONBOARDING_TEXT.ollamaIntro)).toBeInTheDocument();
+    expect(screen.queryByLabelText('OpenRouter API key')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Model')).toHaveValue('qwen2.5vl:7b');
+
+    await user.click(continueButton());
+    expect(spies.save).not.toHaveBeenCalled();
+    expect(await screen.findByText('2 of 3')).toBeInTheDocument();
+  });
+
+  it('is never blocked when Ollama is not installed yet, and says how to get it', async () => {
+    const { user } = setup({ apiKeyStatus: 'missing', ollamaStatus: { running: false, models: [] } });
+    await waitFor(() => expect(ollamaRadio()).toBeEnabled());
+    await user.click(ollamaRadio());
+    expect(await screen.findByRole('button', { name: 'Get Ollama' })).toBeInTheDocument();
+    expect(continueButton()).toBeEnabled();
+  });
+
+  it('offers the model download when the model is missing', async () => {
+    const { user } = setup({ apiKeyStatus: 'missing', ollamaStatus: { running: true, models: [] } });
+    await waitFor(() => expect(ollamaRadio()).toBeEnabled());
+    await user.click(ollamaRadio());
+    expect(await screen.findByRole('button', { name: 'Download model' })).toBeInTheDocument();
+  });
+
+  it('starts on Ollama when it was chosen before the window was closed', async () => {
+    setup({ apiKeyStatus: 'missing', settings: { provider: 'ollama' } });
+    expect(await screen.findByText(/Ollama 0.12.3 is running/)).toBeInTheDocument();
+    expect(ollamaRadio()).toBeChecked();
+    expect(continueButton()).toBeEnabled();
+  });
+
+  it('goes back to the key field when OpenRouter is chosen again', async () => {
+    const { user } = setup({ apiKeyStatus: 'missing', settings: { provider: 'ollama' } });
+    await screen.findByText(/is running/);
+    await user.click(screen.getByRole('radio', { name: /OpenRouter/ }));
+    expect(await screen.findByLabelText('OpenRouter API key')).toBeInTheDocument();
+    expect(continueButton()).toBeDisabled();
+  });
+
+  it('shows why the provider could not be changed', async () => {
+    const { user, api } = setup({ apiKeyStatus: 'missing' });
+    vi.spyOn(api.settings, 'update').mockRejectedValueOnce(new Error('ipc'));
+    await waitFor(() => expect(ollamaRadio()).toBeEnabled());
+    await user.click(ollamaRadio());
+    expect(await screen.findByText('Filey could not change the provider.')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /OpenRouter/ })).toBeChecked();
+  });
+});
+

@@ -120,6 +120,54 @@
   border-top: 1px solid var(--border);
 }
 
+/* Provider choice and Ollama setup (Provider tab, onboarding) */
+
+.settings-choice {
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  border: 0;
+}
+
+.settings-choice__option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.settings-choice__option input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.settings-choice__label,
+.settings-choice__hint {
+  display: block;
+}
+
+.settings-ollama-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+}
+
+.settings-pull {
+  margin-top: var(--space-3);
+}
+
+.settings-pull__bar {
+  width: 100%;
+  height: 8px;
+  margin-bottom: var(--space-2);
+  accent-color: var(--accent);
+}
+
+.settings-pull__text {
+  flex: 1;
+  margin: 0;
+}
+
 /* Filing tab */
 
 .settings-path {

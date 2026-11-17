@@ -1,7 +1,7 @@
 import type { SettingsTable } from '../db';
 import { defaultRules, defaultSettings } from './defaults';
 import type { FolderRule, Settings } from './types';
-import { validateRules, validateRulesOutsideInbox, validateSettings } from './validation';
+import { validateOllamaUrl, validateRules, validateRulesOutsideInbox, validateSettings } from './validation';
 
 export interface SettingsRepository {
   /** Stored values merged over the defaults. */
@@ -71,6 +71,8 @@ export function createSettingsRepository(
         if (patch[key] !== undefined) (next as unknown as Record<string, unknown>)[key] = patch[key];
       }
       validateSettings(next);
+      // Stored without a trailing slash, so `http://localhost:11434/` and `http://localhost:11434` are one address.
+      next.ollamaUrl = validateOllamaUrl(next.ollamaUrl);
       for (const key of keys) {
         if (patch[key] !== undefined) tables.settings.set(key, JSON.stringify(next[key]));
       }

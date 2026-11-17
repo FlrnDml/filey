@@ -1,5 +1,5 @@
 /** Pure helpers that turn IPC data into what the popover shows. */
-import type { AppState, HistoryRow, InboxRow } from '../../../core/ipc';
+import type { AppState, HistoryRow, InboxRow, Settings } from '../../../core/ipc';
 import type { HistoryRowProps, InboxRowProps } from '../../components';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -41,7 +41,12 @@ export function historyRowProps(row: HistoryRow, now: Date): Pick<HistoryRowProp
  * Props for one popover `InboxRow`. A file being analyzed (`working`, or retried right now) is "Working";
  * otherwise a pending file waits for the connection while the app is offline and is new when it is not.
  */
-export function inboxRowProps(row: InboxRow, mode: AppState['mode'] | undefined, retrying = false): Pick<InboxRowProps, 'name' | 'status' | 'detail'> {
+export function inboxRowProps(
+  row: InboxRow,
+  mode: AppState['mode'] | undefined,
+  retrying = false,
+  provider: Settings['provider'] = 'openrouter',
+): Pick<InboxRowProps, 'name' | 'status' | 'detail'> {
   const name = row.fileName;
   if (row.working || retrying) return { name, status: 'working' };
   switch (row.status) {
@@ -50,7 +55,9 @@ export function inboxRowProps(row: InboxRow, mode: AppState['mode'] | undefined,
     case 'duplicate':
       return { name, status: 'duplicate', detail: row.duplicateOf ? `Duplicate of ${row.duplicateOf.finalName}` : 'Duplicate of a filed document' };
     case 'pending':
-      return { name, status: mode === 'offline' ? 'waiting' : 'new' };
+      if (mode !== 'offline') return { name, status: 'new' };
+      // With Ollama the file waits for the local server, not for the internet (arc42 §6.7).
+      return provider === 'ollama' ? { name, status: 'waiting', detail: 'Waiting for Ollama' } : { name, status: 'waiting' };
   }
 }
 
@@ -59,8 +66,8 @@ export interface StatusLine {
   tone: 'success' | 'warning';
 }
 
-/** The header status: "Watching <inbox>", "Paused · API key missing", "Offline · 2 waiting". */
-export function statusLine(state: AppState | null, inboxName: string | null): StatusLine | null {
+/** The header status: "Watching <inbox>", "Paused · API key missing", "Offline · 2 waiting" ("Ollama not running · 2 waiting"). */
+export function statusLine(state: AppState | null, inboxName: string | null, provider: Settings['provider'] = 'openrouter'): StatusLine | null {
   if (!state) return null;
   switch (state.mode) {
     case 'running':
@@ -68,7 +75,7 @@ export function statusLine(state: AppState | null, inboxName: string | null): St
     case 'paused':
       return { text: state.reason === 'missing' ? 'Paused · API key missing' : 'Paused · API key unreadable', tone: 'warning' };
     case 'offline':
-      return { text: state.queuedCount > 0 ? `Offline · ${state.queuedCount} waiting` : 'Offline', tone: 'warning' };
+      return { text: `${provider === 'ollama' ? 'Ollama not running' : 'Offline'}${state.queuedCount > 0 ? ` · ${state.queuedCount} waiting` : ''}`, tone: 'warning' };
   }
 }
 

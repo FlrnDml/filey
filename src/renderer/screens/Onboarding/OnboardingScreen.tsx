@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import type { ApiKeyStatus, FileyApi, FolderSetup } from '../../../core/ipc';
+import type { ApiKeyStatus, FileyApi, FolderSetup, Settings } from '../../../core/ipc';
 import { Button, Icon, Input } from '../../components';
 import { displayPath } from '../Settings/format';
+import { OllamaSetup } from '../Settings/OllamaSetup';
+import { ProviderChoice } from '../Settings/ProviderChoice';
 import './OnboardingScreen.css';
 
 export type OnboardingStep = 1 | 2 | 3;
 
 export const ONBOARDING_TEXT = {
   keyIntro: 'Paste your OpenRouter key and Filey takes care of the rest.',
+  ollamaIntro: 'Install Ollama, download a model and Filey takes care of the rest. Documents never leave your Mac.',
   keySaved: 'Key saved in Keychain',
   keyPlaceholder: 'sk-or-…',
   loginIntro: 'Filey can start when your Mac does, so scans are filed even if you forget it is there.',
@@ -27,7 +30,7 @@ export interface OnboardingScreenProps {
 
 /**
  * First-launch window (arc42 §6.4, docs/design-system/components/Onboarding): three steps, one primary
- * button each. 1: paste the OpenRouter key (saved in the Keychain). 2: start at login or not (applied and
+ * button each. 1: choose the provider: paste the OpenRouter key (saved in the Keychain), or set up Ollama on this Mac. 2: start at login or not (applied and
  * stored right away). 3: Filey lives in the menu bar and where it expects the scans (the Filey folder main created in iCloud Drive,
  * or what to do if that failed); "Got it" marks onboarding as done and main closes the window. Closing the window earlier leaves onboarding incomplete, so it opens again on the next launch.
  * Esc does nothing here: skipping the setup needs the window's close button.
@@ -37,7 +40,7 @@ export function OnboardingScreen({ api = window.filey, initialStep = 1 }: Onboar
 
   return (
     <main className="onboarding">
-      {step === 1 && <KeyStep api={api} onDone={() => setStep(2)} />}
+      {step === 1 && <ProviderStep api={api} onDone={() => setStep(2)} />}
       {step === 2 && <LoginStep api={api} onDone={() => setStep(3)} />}
       {step === 3 && <MenuBarStep api={api} />}
     </main>
@@ -64,7 +67,8 @@ function ErrorText({ children }: { children: ReactNode }) {
   );
 }
 
-function KeyStep({ api, onDone }: { api: FileyApi; onDone(): void }) {
+function ProviderStep({ api, onDone }: { api: FileyApi; onDone(): void }) {
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [key, setKey] = useState('');
   const [status, setStatus] = useState<ApiKeyStatus | null>(null);
   const [error, setError] = useState<string | undefined>();
@@ -81,14 +85,39 @@ function KeyStep({ api, onDone }: { api: FileyApi; onDone(): void }) {
     };
   }, [api]);
 
+  useEffect(() => {
+    let active = true;
+    api.settings.get().then(
+      (s) => active && setSettings(s),
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, [api]);
+
+  const provider = settings?.provider ?? 'openrouter';
+
+  const choose = async (next: Settings['provider']) => {
+    setError(undefined);
+    try {
+      const result = await api.settings.update({ provider: next });
+      if (result.ok) setSettings(result.settings);
+      else setError(result.error.message);
+    } catch {
+      setError('Filey could not change the provider.');
+    }
+  };
+
   // A key saved earlier (onboarding closed after this step) counts as present: Continue keeps it.
   const keySaved = status === 'set';
-  const canContinue = key.trim() !== '' || keySaved;
+  // Ollama needs no key. Without a running Ollama, scans wait in the inbox, so Continue is never blocked.
+  const canContinue = provider === 'ollama' || key.trim() !== '' || keySaved;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy || !canContinue) return;
-    if (key.trim() === '') {
+    if (provider === 'ollama' || key.trim() === '') {
       onDone();
       return;
     }
@@ -112,22 +141,30 @@ function KeyStep({ api, onDone }: { api: FileyApi; onDone(): void }) {
       <div className="onboarding__mark" aria-hidden="true">
         <Icon name="scan" size={28} />
       </div>
-      <StepHeader step={1} title="Scan it. Filed." intro={ONBOARDING_TEXT.keyIntro} />
-      <Input
-        label="OpenRouter API key"
-        type="password"
-        variant="mono"
-        autoComplete="off"
-        autoFocus
-        placeholder={keySaved ? ONBOARDING_TEXT.keySaved : ONBOARDING_TEXT.keyPlaceholder}
-        value={key}
-        onChange={(event) => {
-          setKey(event.target.value);
-          setError(undefined);
-        }}
-        error={error}
-        className="onboarding__field"
-      />
+      <StepHeader step={1} title="Scan it. Filed." intro={provider === 'ollama' ? ONBOARDING_TEXT.ollamaIntro : ONBOARDING_TEXT.keyIntro} />
+      <ProviderChoice value={provider} onChange={(next) => void choose(next)} disabled={settings === null} />
+      {provider === 'ollama' && settings ? (
+        <>
+          <OllamaSetup api={api} settings={settings} onSettings={setSettings} />
+          {error && <ErrorText>{error}</ErrorText>}
+        </>
+      ) : (
+        <Input
+          label="OpenRouter API key"
+          type="password"
+          variant="mono"
+          autoComplete="off"
+          autoFocus
+          placeholder={keySaved ? ONBOARDING_TEXT.keySaved : ONBOARDING_TEXT.keyPlaceholder}
+          value={key}
+          onChange={(event) => {
+            setKey(event.target.value);
+            setError(undefined);
+          }}
+          error={error}
+          className="onboarding__field"
+        />
+      )}
       <Button type="submit" variant="primary" fullWidth className="onboarding__push" disabled={!canContinue} aria-busy={busy || undefined}>
         Continue
       </Button>

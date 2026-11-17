@@ -4,6 +4,7 @@ import type { ConnectionTestInput, ConnectionTestResult } from '../../core/conne
 import type { FolderSetup } from '../../core/folders';
 import { isInside, listHistoryRows, resolveRevealPath, toInboxRow } from '../../core/history';
 import type { ImportService } from '../../core/import';
+import { OLLAMA_DOWNLOAD_URL, type OllamaService } from '../../core/ollama';
 import {
   EDITABLE_SETTINGS,
   FOLDER_KINDS,
@@ -23,7 +24,7 @@ import {
   type SettingsTab,
 } from '../../core/ipc';
 import type { FileSystem, LogFileSystem, Logger } from '../../core/ports';
-import { SettingsValidationError, type SettingsRepository } from '../../core/settings';
+import { PROVIDERS, SettingsValidationError, type SettingsRepository } from '../../core/settings';
 import type { Watcher } from '../../core/watcher';
 import { currentAppState } from './events';
 import type { IpcHandlers } from './register';
@@ -42,6 +43,7 @@ import {
 /** Limits for strings from the renderer; generous for real input, small enough to stop abuse. */
 export const LIMITS = {
   model: 200,
+  ollamaUrl: 200,
   namingTemplate: 500,
   apiKey: 4096,
   folder: 255,
@@ -121,6 +123,7 @@ export interface ServiceHandlerDeps {
   >;
   watcher: Pick<Watcher, 'restart'>;
   testConnection(input: ConnectionTestInput): Promise<ConnectionTestResult>;
+  ollama: Pick<OllamaService, 'status' | 'pull' | 'cancelPull'>;
   fs: Pick<FileSystem, 'exists'>;
   /** Thin wrapper around Electron's `shell`. */
   shell: {
@@ -129,6 +132,8 @@ export interface ServiceHandlerDeps {
     openPath(fullPath: string): Promise<string>;
     /** Moves a file to the Trash (`shell.trashItem`); rejects if that fails. */
     trashItem(fullPath: string): Promise<void>;
+    /** Opens a web address in the default browser (`shell.openExternal`); only ever called with `OLLAMA_DOWNLOAD_URL`. */
+    openExternal(url: string): Promise<void>;
   };
   /** Native folder picker (`dialog.showOpenDialog`); resolves with the path or null if cancelled. */
   chooseFolder(options: { title: string; defaultPath?: string }): Promise<string | null>;
@@ -155,7 +160,10 @@ function validatePatch(value: unknown): SettingsPatch {
   const patch: SettingsPatch = {};
   // Empty strings pass, so the settings validation can answer with a user-facing message for that field.
   const pathOrEmpty = (v: unknown, name: string) => (v === '' ? '' : expectAbsolutePath(v, name));
+  if (raw.provider !== undefined) patch.provider = expectOneOf(raw.provider, 'provider', PROVIDERS);
   if (raw.model !== undefined) patch.model = expectString(raw.model, 'model', { max: LIMITS.model, allowEmpty: true });
+  if (raw.ollamaUrl !== undefined) patch.ollamaUrl = expectString(raw.ollamaUrl, 'ollamaUrl', { max: LIMITS.ollamaUrl, allowEmpty: true });
+  if (raw.ollamaModel !== undefined) patch.ollamaModel = expectString(raw.ollamaModel, 'ollamaModel', { max: LIMITS.model, allowEmpty: true });
   if (raw.inboxPath !== undefined) patch.inboxPath = pathOrEmpty(raw.inboxPath, 'inboxPath');
   if (raw.targetPath !== undefined) patch.targetPath = pathOrEmpty(raw.targetPath, 'targetPath');
   if (raw.namingTemplate !== undefined) {
@@ -178,8 +186,9 @@ function validateRules(value: unknown): FolderRule[] {
 function validateConnectionInput(args: unknown[]): [ConnectionTestInput] {
   expectArity(args, 0, 1);
   if (args[0] === undefined) return [{}];
-  const raw = expectObject(args[0], 'input', ['key', 'model'] as const);
+  const raw = expectObject(args[0], 'input', ['provider', 'key', 'model'] as const);
   const input: ConnectionTestInput = {};
+  if (raw.provider !== undefined) input.provider = expectOneOf(raw.provider, 'provider', PROVIDERS);
   if (raw.key !== undefined) input.key = expectString(raw.key, 'key', { max: LIMITS.apiKey, allowEmpty: true });
   if (raw.model !== undefined) input.model = expectString(raw.model, 'model', { max: LIMITS.model, allowEmpty: true });
   return [input];
@@ -201,7 +210,7 @@ const sameFolder = (a: string, b: string) => path.resolve(a) === path.resolve(b)
 
 export function createServiceHandlers(deps: ServiceHandlerDeps): IpcHandlers {
   const { settings, apiKeys, imports, logger } = deps;
-  const { app, settings: settingsChannels, apiKey, connection, inbox, history, state, dialogs } = IPC_CHANNELS;
+  const { app, settings: settingsChannels, apiKey, connection, ollama, inbox, history, state, dialogs } = IPC_CHANNELS;
 
   const saved = (next: Settings) => {
     deps.onSettingsChanged?.(next);
@@ -301,6 +310,26 @@ export function createServiceHandlers(deps: ServiceHandlerDeps): IpcHandlers {
     [apiKey.clear]: { validate: expectNoArgs, handle: () => apiKeys.clear() },
 
     [connection.test]: { validate: validateConnectionInput, handle: (input) => deps.testConnection(input) },
+
+    [ollama.status]: { validate: expectNoArgs, handle: () => deps.ollama.status() },
+    [ollama.pull]: {
+      validate: (args) => {
+        expectArity(args, 1);
+        return [expectString(args[0], 'model', { max: LIMITS.model })];
+      },
+      handle: (model) => deps.ollama.pull(model),
+    },
+    [ollama.cancelPull]: { validate: expectNoArgs, handle: () => deps.ollama.cancelPull() },
+    [ollama.openDownloadPage]: {
+      validate: expectNoArgs,
+      handle: async () => {
+        try {
+          await deps.shell.openExternal(OLLAMA_DOWNLOAD_URL);
+        } catch (err) {
+          logger.log('warn', `IPC: could not open the Ollama download page: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      },
+    },
 
     [inbox.list]: {
       validate: expectNoArgs,

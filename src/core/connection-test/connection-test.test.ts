@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { AnalyzeFailure, AnalyzeOptions, AnalyzeResult, DocumentInfo } from '../analyzer';
 import type { ApiKeyResult } from '../api-key';
+import type { OllamaStatus } from '../ollama';
 import { defaultRules, defaultSettings } from '../settings';
 import { CONNECTION_TEST_MESSAGES, createConnectionTester, DEFAULT_SAMPLE_EXPECTATION, normalizeSender, senderMatches } from '.';
 
@@ -36,14 +37,14 @@ describe('connection test', () => {
     await expect(t.test({})).resolves.toEqual({ ok: true, message: CONNECTION_TEST_MESSAGES.ok });
     const [pdf, options] = t.analyze.mock.calls[0]!;
     expect(pdf.equals(Buffer.from(SAMPLE))).toBe(true);
-    expect(options).toMatchObject({ apiKey: STORED_KEY, model: 'google/gemini-2.5-flash', rules: defaultRules() });
+    expect(options).toMatchObject({ config: { provider: 'openrouter', apiKey: STORED_KEY, model: 'google/gemini-2.5-flash' }, rules: defaultRules() });
     expect(options.timeoutMs).toBeGreaterThan(0);
   });
 
   it('prefers the typed key and model over the saved ones', async () => {
     const t = setup({ ok: true, info: MATCH }, { status: 'missing' });
     await t.test({ key: '  sk-or-typed  ', model: ' openai/gpt-4o ' });
-    expect(t.analyze.mock.calls[0]![1]).toMatchObject({ apiKey: 'sk-or-typed', model: 'openai/gpt-4o' });
+    expect(t.analyze.mock.calls[0]![1].config).toMatchObject({ apiKey: 'sk-or-typed', model: 'openai/gpt-4o' });
   });
 
   it('accepts sender alternatives and the shortened sender', async () => {
@@ -113,6 +114,74 @@ describe('connection test', () => {
       settings: { getSettings: () => defaultSettings('/home/u'), listRules: () => defaultRules() },
     });
     await expect(test({})).resolves.toEqual({ ok: false, reason: 'provider_error', message: CONNECTION_TEST_MESSAGES.sampleMissing });
+  });
+});
+
+describe('connection test with Ollama', () => {
+  const RUNNING: OllamaStatus = { running: true, version: '0.12.3', models: ['qwen2.5vl:7b'] };
+
+  function setupOllama(result: AnalyzeResult, status: OllamaStatus = RUNNING) {
+    const analyze = vi.fn<(pdf: Buffer, options: AnalyzeOptions) => Promise<AnalyzeResult>>(async () => result);
+    const get = vi.fn(async () => ({ status: 'missing' }) as ApiKeyResult);
+    const test = createConnectionTester({
+      analyze,
+      loadSample: async () => SAMPLE,
+      apiKeys: { get },
+      settings: { getSettings: () => ({ ...defaultSettings('/home/u'), provider: 'ollama' as const }), listRules: () => defaultRules() },
+      ollama: { status: async () => status },
+    });
+    return { test, analyze, get };
+  }
+
+  it('passes without a key, using the saved address and model, and says it can read scans', async () => {
+    const t = setupOllama({ ok: true, info: MATCH });
+    await expect(t.test({})).resolves.toEqual({ ok: true, message: CONNECTION_TEST_MESSAGES.okOllama });
+    expect(t.analyze.mock.calls[0]![1].config).toEqual({ provider: 'ollama', baseUrl: 'http://localhost:11434', model: 'qwen2.5vl:7b' });
+    expect(t.analyze.mock.calls[0]![1].timeoutMs).toBeGreaterThan(60_000);
+    expect(t.get).not.toHaveBeenCalled();
+  });
+
+  it('uses the typed model and the provider typed into the settings before they are saved', async () => {
+    const analyze = vi.fn<(pdf: Buffer, options: AnalyzeOptions) => Promise<AnalyzeResult>>(async () => ({ ok: true, info: MATCH }));
+    const test = createConnectionTester({
+      analyze,
+      loadSample: async () => SAMPLE,
+      apiKeys: { get: async () => ({ status: 'missing' }) },
+      settings: { getSettings: () => defaultSettings('/home/u'), listRules: () => defaultRules() },
+      ollama: { status: async () => ({ running: true, models: ['gemma3:4b'] }) },
+    });
+    await expect(test({ provider: 'ollama', model: ' gemma3:4b ' })).resolves.toMatchObject({ ok: true });
+    expect(analyze.mock.calls[0]![1].config).toMatchObject({ provider: 'ollama', model: 'gemma3:4b' });
+  });
+
+  it('says Ollama is not running without analyzing anything', async () => {
+    const t = setupOllama({ ok: true, info: MATCH }, { running: false, models: [] });
+    await expect(t.test({})).resolves.toEqual({ ok: false, reason: 'server_not_running', message: CONNECTION_TEST_MESSAGES.ollamaNotRunning });
+    expect(t.analyze).not.toHaveBeenCalled();
+  });
+
+  it('says the model is not installed, also when only the :latest tag differs', async () => {
+    const t = setupOllama({ ok: true, info: MATCH }, { running: true, models: ['gemma3:4b'] });
+    await expect(t.test({})).resolves.toEqual({ ok: false, reason: 'model_not_installed', message: CONNECTION_TEST_MESSAGES.ollamaModelNotInstalled('qwen2.5vl:7b') });
+    expect(t.analyze).not.toHaveBeenCalled();
+    const latest = setupOllama({ ok: true, info: MATCH }, { running: true, models: ['qwen2.5vl:latest'] });
+    await expect(latest.test({ model: 'qwen2.5vl' })).resolves.toMatchObject({ ok: true });
+  });
+
+  it.each([
+    [{ kind: 'offline', message: 'x' }, 'server_not_running', CONNECTION_TEST_MESSAGES.ollamaNotRunning],
+    [{ kind: 'timeout', message: 'x' }, 'offline', CONNECTION_TEST_MESSAGES.ollamaTimeout],
+    [{ kind: 'render_failed', message: 'x' }, 'provider_error', CONNECTION_TEST_MESSAGES.renderFailed],
+    [{ kind: 'invalid_result', message: 'x' }, 'no_structured_output', CONNECTION_TEST_MESSAGES.noStructuredOutput],
+    [{ kind: 'provider_error', message: 'x', statusCode: 404 }, 'model_not_installed', CONNECTION_TEST_MESSAGES.ollamaModelNotInstalled('qwen2.5vl:7b')],
+    [{ kind: 'provider_error', message: 'x', statusCode: 500 }, 'provider_error', CONNECTION_TEST_MESSAGES.providerError(500, 'ollama')],
+  ] as const)('maps analyzer failure %o to %s', async (f, reason, message) => {
+    await expect(setupOllama(failure(f)).test({})).resolves.toEqual({ ok: false, reason, message });
+  });
+
+  it('reports a model that cannot read the sample scan', async () => {
+    const t = setupOllama({ ok: true, info: { ...MATCH, sender: 'Max Mustermann' } });
+    await expect(t.test({})).resolves.toMatchObject({ ok: false, reason: 'cannot_read_scans' });
   });
 });
 

@@ -1,4 +1,5 @@
 import type { AnalyzeOptions, AnalyzeResult } from '../analyzer';
+import type { OllamaClient } from '../ollama';
 import type { ApiKeyStore } from '../api-key';
 import type { ImportTables, ProcessedImport, UnprocessedImport } from '../db';
 import type { Clock, Connectivity, FileSystem, Logger, Notifier, Scheduler } from '../ports';
@@ -9,7 +10,7 @@ export type ImportState =
   | { mode: 'running' }
   /** The API key is missing or unreadable (arc42 §6.6): nothing is sent or moved until a key is saved. */
   | { mode: 'paused'; reason: 'missing' | 'unreadable' }
-  /** OpenRouter cannot be reached (arc42 §6.7): files wait in the queue. */
+  /** The provider cannot be reached (no internet for OpenRouter, Ollama not running; arc42 §6.7): files wait in the queue. */
   | { mode: 'offline' };
 
 export type ImportOutcome = 'filed' | 'failed' | 'duplicate' | 'queued' | 'paused' | 'vanished' | 'skipped';
@@ -33,6 +34,8 @@ export interface ImportServiceDeps {
   logger: Logger;
   clock: Clock;
   connectivity: Connectivity;
+  /** Asks Ollama whether it answers; used instead of `connectivity` while the provider is Ollama. */
+  localServer: Pick<OllamaClient, 'isReachable'>;
   scheduler: Scheduler;
 }
 
@@ -83,4 +86,9 @@ export interface ImportService {
    * key on start and not only before the next import (arc42 §6.6). Never rejects.
    */
   checkKey(): Promise<void>;
+  /**
+   * The provider or its settings changed: pauses for a missing key (OpenRouter) or resumes (Ollama, or a key is present),
+   * imports files that waited for a key, and re-checks the connection if the service is offline. Never rejects.
+   */
+  providerChanged(): Promise<void>;
 }

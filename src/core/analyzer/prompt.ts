@@ -3,14 +3,14 @@ import { MAX_SENDER_LENGTH } from './schema';
 
 const FALLBACK_DESCRIPTION = 'Documents that match no other folder';
 
-/** Instructions plus the user's folder rules (arc42 §5.2); the PDF itself is added by `buildContent`. */
+/** Instructions plus the user's folder rules (arc42 §5.2); the document itself is added by `buildContent` or `buildImageContent`. */
 export function buildPrompt(rules: readonly FolderRule[]): string {
   const folders = new Map<string, string>();
   for (const rule of rules) if (!folders.has(rule.folder)) folders.set(rule.folder, rule.description);
   if (!folders.has(FALLBACK_FOLDER)) folders.set(FALLBACK_FOLDER, FALLBACK_DESCRIPTION);
   const folderList = [...folders].map(([folder, description]) => `- ${folder}: ${description}`).join('\n');
 
-  return `You read a scanned or digital document (the attached PDF; it may be in any language) and return metadata used to rename and file it.
+  return `You read a scanned or digital document (attached as a PDF or as images of its first pages; it may be in any language) and return metadata used to rename and file it.
 
 Return these fields:
 - date: the date of the document itself (the date the letter was written or issued) as YYYY-MM-DD. This is not a deadline, due date, payment date, appointment or period mentioned in the text. Use null if the document has no such date.

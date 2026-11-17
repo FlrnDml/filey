@@ -223,6 +223,20 @@ describe('Popover', () => {
     expect(tab('Inbox')).toHaveAccessibleName('Inbox');
   });
 
+  it('says files wait for Ollama, and that Ollama is not running, while the provider is Ollama', async () => {
+    await setup({ ...DEFAULTS, settings: { provider: 'ollama' }, state: appState({ mode: 'offline', queuedCount: 1, attentionCount: 2 }) });
+    expect(await screen.findByText('Ollama not running · 1 waiting')).toBeInTheDocument();
+    expect(screen.queryByText(/^Offline/)).not.toBeInTheDocument();
+    expect(await screen.findByText('Waiting for Ollama')).toBeInTheDocument();
+  });
+
+  it('follows a provider change made in Settings', async () => {
+    const { emit } = await setup({ ...DEFAULTS, state: appState({ mode: 'offline', queuedCount: 1, attentionCount: 2 }) });
+    expect(screen.getByText('Offline · 1 waiting')).toBeInTheDocument();
+    act(() => emit('settings:changed', { ...settingsFixture(), provider: 'ollama' }));
+    expect(screen.getByText('Ollama not running · 1 waiting')).toBeInTheDocument();
+  });
+
   describe('History', () => {
     it('shows the filed documents with folder and time, and the search field', async () => {
       const { user } = await setup();
@@ -377,6 +391,8 @@ function settingsFixture() {
   return {
     provider: 'openrouter' as const,
     model: 'm',
+    ollamaUrl: 'http://localhost:11434',
+    ollamaModel: 'qwen2.5vl:7b',
     inboxPath: '/x',
     targetPath: '/y',
     namingTemplate: '{title}.pdf',

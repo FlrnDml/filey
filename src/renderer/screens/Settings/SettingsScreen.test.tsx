@@ -458,3 +458,94 @@ describe('Settings: live updates', () => {
     expect(screen.getByRole('textbox', { name: 'Naming template' })).toHaveValue('{title}.pdf');
   });
 });
+
+describe('Settings: Provider with Ollama', () => {
+  const radio = (name: RegExp) => screen.getByRole('radio', { name });
+
+  it('shows the two providers and starts with the saved one', async () => {
+    await setup('provider');
+    expect(radio(/OpenRouter/)).toBeChecked();
+    expect(radio(/Ollama/)).not.toBeChecked();
+    expect(screen.getByLabelText('OpenRouter API key')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Ollama address')).not.toBeInTheDocument();
+  });
+
+  it('switches to Ollama: saves the provider, hides the key and shows Ollama\'s settings and privacy note', async () => {
+    const { user, spies } = await setup('provider');
+    await user.click(radio(/Ollama/));
+    expect(spies.update).toHaveBeenCalledExactlyOnceWith({ provider: 'ollama' });
+    expect(await screen.findByLabelText('Ollama address')).toHaveValue('http://localhost:11434');
+    expect(screen.getByLabelText('Model')).toHaveValue('qwen2.5vl:7b');
+    expect(screen.queryByLabelText('OpenRouter API key')).not.toBeInTheDocument();
+    expect(await screen.findByText(/Ollama 0.12.3 is running/)).toBeInTheDocument();
+    expect(screen.getByText(/document contents stay on your Mac/)).toBeInTheDocument();
+    expect(radio(/Ollama/)).toBeChecked();
+  });
+
+  it('switches back to OpenRouter and keeps the saved key and model', async () => {
+    const { user } = await setup('provider', { settings: { provider: 'ollama', model: 'openai/gpt-4o' } });
+    await user.click(radio(/OpenRouter/));
+    expect(await screen.findByLabelText('OpenRouter API key')).toHaveAttribute('placeholder', 'Key saved in Keychain');
+    expect(screen.getByLabelText(/^Model/)).toHaveValue('openai/gpt-4o');
+  });
+
+  it('shows why the provider could not be changed', async () => {
+    const { user } = await setup('provider', { rejectUpdate: () => ({ message: 'Unsupported provider.' }) });
+    await user.click(radio(/Ollama/));
+    expect(await screen.findByText('Unsupported provider.')).toBeInTheDocument();
+    expect(radio(/OpenRouter/)).toBeChecked();
+  });
+
+  it('saves a changed address when the field is left and shows a refused one', async () => {
+    const { user, spies } = await setup('provider', {
+      settings: { provider: 'ollama' },
+      rejectUpdate: (patch) => (patch.ollamaUrl === 'http://192.168.1.5:11434' ? { message: 'The Ollama address must point to this Mac, e.g. http://localhost:11434.', field: 'ollamaUrl' } : undefined),
+    });
+    const field = await screen.findByLabelText('Ollama address');
+    await user.clear(field);
+    await user.type(field, 'http://127.0.0.1:11500{Enter}');
+    expect(spies.update).toHaveBeenCalledWith({ ollamaUrl: 'http://127.0.0.1:11500' });
+    await waitFor(() => expect(field).toHaveValue('http://127.0.0.1:11500'));
+
+    await user.clear(field);
+    await user.type(field, 'http://192.168.1.5:11434{Enter}');
+    expect(await screen.findByText(/must point to this Mac/)).toBeInTheDocument();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('falls back to the standard address for an empty field', async () => {
+    const { user, spies } = await setup('provider', { settings: { provider: 'ollama', ollamaUrl: 'http://localhost:11500' } });
+    const field = await screen.findByLabelText('Ollama address');
+    await user.clear(field);
+    await user.keyboard('{Enter}');
+    expect(spies.update).toHaveBeenCalledExactlyOnceWith({ ollamaUrl: 'http://localhost:11434' });
+  });
+
+  it('tests the connection with Ollama and the saved model, and shows the result', async () => {
+    const { user, spies } = await setup('provider', { settings: { provider: 'ollama' }, connection: { ok: true, message: 'Connected · model can read scans' } });
+    await screen.findByText(/is running/);
+    await user.click(screen.getByRole('button', { name: 'Test connection' }));
+    expect(spies.test).toHaveBeenCalledExactlyOnceWith({ provider: 'ollama', model: 'qwen2.5vl:7b' });
+    expect(await screen.findByText('Connected · model can read scans')).toBeInTheDocument();
+  });
+
+  it('shows why the Ollama test failed, and a test that could not run', async () => {
+    const { user, spies } = await setup('provider', {
+      settings: { provider: 'ollama' },
+      connection: { ok: false, reason: 'model_not_installed', message: 'The model qwen2.5vl:7b is not installed. Download it first.' },
+    });
+    await screen.findByText(/is running/);
+    await user.click(screen.getByRole('button', { name: 'Test connection' }));
+    expect(await screen.findByText('The model qwen2.5vl:7b is not installed. Download it first.')).toBeInTheDocument();
+    spies.test.mockRejectedValueOnce(new Error('ipc'));
+    await user.click(screen.getByRole('button', { name: 'Test connection' }));
+    expect(await screen.findByText('Filey could not run the connection test.')).toBeInTheDocument();
+  });
+
+  it('keeps the OpenRouter test unchanged: it does not name a provider', async () => {
+    const { user, spies } = await setup('provider');
+    await user.click(screen.getByRole('button', { name: 'Test connection' }));
+    expect(spies.test).toHaveBeenCalledExactlyOnceWith({ model: 'google/gemini-2.5-flash' });
+  });
+});
+

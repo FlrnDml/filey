@@ -1,9 +1,17 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { foldersIn, iCloudDriveRoot } from '../folders/setup';
-import { DEFAULT_MODEL, DEFAULT_NAMING_TEMPLATE, FALLBACK_FOLDER, type FolderRule, type Settings } from './types';
+import {
+  DEFAULT_MODEL,
+  DEFAULT_NAMING_TEMPLATE,
+  DEFAULT_OLLAMA_MODEL,
+  DEFAULT_OLLAMA_URL,
+  FALLBACK_FOLDER,
+  type FolderRule,
+  type Settings,
+} from './types';
 
-export { DEFAULT_MODEL, DEFAULT_NAMING_TEMPLATE };
+export { DEFAULT_MODEL, DEFAULT_NAMING_TEMPLATE, DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL };
 
 /**
  * Defaults: `Documents/Filey` in iCloud Drive with the inbox in `Documents/Filey/Inbox`. At the first launch the folders
@@ -14,6 +22,8 @@ export function defaultSettings(home: string = homedir()): Settings {
   return {
     provider: 'openrouter',
     model: DEFAULT_MODEL,
+    ollamaUrl: DEFAULT_OLLAMA_URL,
+    ollamaModel: DEFAULT_OLLAMA_MODEL,
     ...foldersIn(join(iCloudDriveRoot(home), 'Documents')),
     namingTemplate: DEFAULT_NAMING_TEMPLATE,
     autostart: false,

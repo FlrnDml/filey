@@ -177,6 +177,8 @@ export const electronShell = {
   openPath: (fullPath: string) => shell.openPath(fullPath),
   /** Moves the file to the Trash, so it can be put back. */
   trashItem: (fullPath: string) => shell.trashItem(fullPath),
+  /** Callers pass a fixed https address only (`OLLAMA_DOWNLOAD_URL`); the renderer never supplies one. */
+  openExternal: (url: string) => shell.openExternal(url),
 };
 
 /** Native folder picker, attached to the focused window if there is one. */

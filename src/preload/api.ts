@@ -22,7 +22,7 @@ export function createFileyApi(ipcRenderer: IpcRendererLike): FileyApi {
     return () => ipcRenderer.removeListener(channel, wrapped);
   };
 
-  const { app, settings, apiKey, connection, inbox, history, state, dialogs, popover } = IPC_CHANNELS;
+  const { app, settings, apiKey, connection, ollama, inbox, history, state, dialogs, popover } = IPC_CHANNELS;
 
   return {
     app: {
@@ -50,6 +50,13 @@ export function createFileyApi(ipcRenderer: IpcRendererLike): FileyApi {
     },
     connection: {
       test: (input = {}) => invoke(connection.test, input),
+    },
+    ollama: {
+      status: () => invoke(ollama.status),
+      pull: (model) => invoke(ollama.pull, model),
+      cancelPull: () => invoke(ollama.cancelPull),
+      openDownloadPage: () => invoke(ollama.openDownloadPage),
+      onPullProgress: (listener) => subscribe(ollama.pullProgress, listener),
     },
     inbox: {
       list: () => invoke(inbox.list),

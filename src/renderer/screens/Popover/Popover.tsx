@@ -8,6 +8,7 @@ import {
   type InboxRow as InboxEntry,
   type RetryResult,
   type RevealResult,
+  type Settings,
 } from '../../../core/ipc';
 import { Button, HistoryRow, Icon, InboxRow, Input, MenuItem, Tabs } from '../../components';
 import { cx } from '../../components/cx';
@@ -56,6 +57,7 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
   const [historyRows, setHistoryRows] = useState<HistoryEntry[] | null>(null);
   const [state, setState] = useState<AppState | null>(null);
   const [inboxPath, setInboxPath] = useState<string | null>(null);
+  const [provider, setProvider] = useState<Settings['provider']>('openrouter');
   const [view, setView] = useState<View>('history');
   const [query, setQuery] = useState('');
   const [selectedInboxId, setSelectedInboxId] = useState<number | null>(null);
@@ -110,7 +112,10 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
       }
     });
     const offState = api.state.onChanged(setState);
-    const offSettings = api.settings.onChanged((settings) => setInboxPath(settings.inboxPath));
+    const offSettings = api.settings.onChanged((settings) => {
+      setInboxPath(settings.inboxPath);
+      setProvider(settings.provider);
+    });
     api.inbox.list().then(
       (list) => {
         if (!active) return;
@@ -132,7 +137,11 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
       () => undefined,
     );
     api.settings.get().then(
-      (s) => active && setInboxPath(s.inboxPath),
+      (s) => {
+        if (!active) return;
+        setInboxPath(s.inboxPath);
+        setProvider(s.provider);
+      },
       () => undefined,
     );
     return () => {
@@ -342,7 +351,7 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
     }
   };
 
-  const status = statusLine(state, inboxPath === null ? null : folderName(inboxPath));
+  const status = statusLine(state, inboxPath === null ? null : folderName(inboxPath), provider);
   const inboxLabel = inboxPath === null ? 'your inbox folder' : folderName(inboxPath);
   const time = clock;
   // Keep the focus in the search field or the list when a row or button is clicked, as in a native menu.
@@ -402,7 +411,7 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
           onKeyDown={onInboxKeyDown}
         >
           {inboxList.map((row) => {
-            const props = inboxRowProps(row, state?.mode, retrying.has(row.id));
+            const props = inboxRowProps(row, state?.mode, retrying.has(row.id), provider);
             return (
               <InboxRow
                 key={row.id}

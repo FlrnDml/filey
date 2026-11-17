@@ -65,6 +65,13 @@ describe('inboxRowProps', () => {
     expect(inboxRowProps(pending!, 'offline').status).toBe('waiting');
   });
 
+  it('says a waiting file waits for Ollama when that is the provider, and only then', () => {
+    expect(inboxRowProps(pending!, 'offline', false, 'ollama')).toEqual({ name: 'Scan 2026-03-11 17.55.pdf', status: 'waiting', detail: 'Waiting for Ollama' });
+    expect(inboxRowProps(pending!, 'offline', false, 'openrouter')).toEqual({ name: 'Scan 2026-03-11 17.55.pdf', status: 'waiting' });
+    expect(inboxRowProps(pending!, 'running', false, 'ollama').status).toBe('new');
+    expect(inboxRowProps(failed!, 'offline', false, 'ollama').status).toBe('failed');
+  });
+
   it('shows a working or retrying file as working', () => {
     expect(inboxRowProps({ ...pending!, working: true }, 'offline').status).toBe('working');
     expect(inboxRowProps(failed!, 'running', true)).toEqual({ name: 'Scan 2026-03-11 18.02.pdf', status: 'working' });
@@ -80,6 +87,13 @@ describe('statusLine', () => {
     [{ mode: 'offline', queuedCount: 0, analyzingId: null, attentionCount: 0 } as const, { text: 'Offline', tone: 'warning' }],
   ] satisfies [AppState, unknown][])('%o', (state, expected) => {
     expect(statusLine(state, 'Documents')).toEqual(expected);
+  });
+
+  it('says Ollama is not running instead of offline when that is the provider', () => {
+    const offline = (queuedCount: number) => ({ mode: 'offline', queuedCount, analyzingId: null, attentionCount: 0 }) as const;
+    expect(statusLine(offline(2), 'Documents', 'ollama')).toEqual({ text: 'Ollama not running · 2 waiting', tone: 'warning' });
+    expect(statusLine(offline(0), 'Documents', 'ollama')).toEqual({ text: 'Ollama not running', tone: 'warning' });
+    expect(statusLine({ mode: 'running', queuedCount: 0, analyzingId: null, attentionCount: 0 }, 'Documents', 'ollama')).toEqual({ text: 'Watching Documents', tone: 'success' });
   });
 
   it('shows nothing while loading', () => {

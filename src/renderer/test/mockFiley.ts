@@ -11,6 +11,8 @@ import type {
   FolderSetup,
   HistoryRow,
   InboxRow,
+  OllamaPullResult,
+  OllamaStatus,
   SaveApiKeyResult,
   Settings,
   SettingsError,
@@ -41,6 +43,10 @@ export interface MockFileyOptions {
   folderSetup?: FolderSetup;
   /** What saving the API key answers. Default: saved. */
   saveApiKey?: (key: string) => SaveApiKeyResult;
+  /** What Ollama reports. Default: running with the recommended model installed. */
+  ollamaStatus?: OllamaStatus;
+  /** What a model download answers. Default: finished. */
+  pullModel?: (model: string) => Promise<OllamaPullResult>;
 }
 
 export interface MockFiley {
@@ -64,6 +70,8 @@ const MOCK_FOLDER_SETUP: FolderSetup = {
 const SETTINGS: Settings = {
   provider: 'openrouter',
   model: 'google/gemini-2.5-flash',
+  ollamaUrl: 'http://localhost:11434',
+  ollamaModel: 'qwen2.5vl:7b',
   inboxPath: '/Users/me/Library/Mobile Documents/com~apple~CloudDocs/Documents',
   targetPath: '/Users/me/Library/Mobile Documents/com~apple~CloudDocs/Documents/Filed',
   namingTemplate: '{category}/{date}_{sender}_{title}.pdf',
@@ -90,6 +98,8 @@ export function createMockFiley({
   rejectRules,
   folderSetup = MOCK_FOLDER_SETUP,
   saveApiKey = () => ({ ok: true }),
+  ollamaStatus = { running: true, version: '0.12.3', models: ['qwen2.5vl:7b'] },
+  pullModel = async () => ({ ok: true }),
 }: MockFileyOptions = {}): MockFiley {
   const appState: AppState = state ?? {
     mode: 'running',
@@ -153,6 +163,13 @@ export function createMockFiley({
       },
     },
     connection: { test: async () => connection },
+    ollama: {
+      status: async () => ollamaStatus,
+      pull: pullModel,
+      cancelPull: async () => undefined,
+      openDownloadPage: async () => undefined,
+      onPullProgress: on('ollama:pull-progress'),
+    },
     inbox: {
       list: async () => inbox,
       retry: async () => 'started',
