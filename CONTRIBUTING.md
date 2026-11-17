@@ -40,7 +40,7 @@ On a Mac, after `npm ci` (the first start downloads the Electron binary):
 npm start
 ```
 
-This is `electron-forge start`: Webpack builds the main process, the preload script and the renderer, and opens Filey. Renderer changes are picked up live.
+This is `electron-forge start`: Webpack builds the main process, the preload script and the renderer, and opens Filey. There is no hot reload (its client cannot run in the sandboxed preload): after a renderer change, type `rs` and Enter in the terminal running `npm start` to restart Filey.
 
 - Filey is a menu-bar app: look for its icon in the menu bar, there is no Dock icon. The first launch shows the onboarding window (choose OpenRouter and paste your key, or choose Ollama and download a model; the folders are created for you).
 - The main process logs to the terminal and to `~/Library/Logs/Filey/filey.log`.
