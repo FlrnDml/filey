@@ -152,6 +152,11 @@
   margin: 0 0 var(--space-3);
 }
 
+/* Space between the "Get Ollama" button and the Model field below it. */
+.settings-ollama-actions {
+  margin-bottom: var(--space-4);
+}
+
 .settings-pull {
   margin-top: var(--space-3);
 }
