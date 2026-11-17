@@ -26,6 +26,9 @@ Tagline: *"Scan it. Filed."*
 | F6 | Duplicate scans are not filed again: a file whose content was already filed (and that document still exists) stays in the inbox, the Inbox view shows it as a duplicate of the earlier document, and the user is notified, so the same document does not end up filed many times |
 | F7 | App shows a history of the filed documents (processed imports) |
 | F8 | App shows the files still in the inbox (unprocessed imports: new, waiting, failed or duplicate) in a separate Inbox view, where failed ones can be retried and any can be moved to the Trash |
+| F9 | The Filing settings show the target folder as a tree (nested folders included), with each folder's rule state; a folder rule is edited by clicking its folder (extends F3) |
+| F10 | An existing folder structure can be turned into folder rules: Filey scans the target folder on request and proposes a rule for every folder without one; the user reviews the proposals before they are saved |
+| F11 | Existing files whose names do not match the naming template can be listed and renamed from a queue: the user accepts or skips each proposed name; files are renamed in their current folder, never moved and never overwritten (extends F2) |
 
 **Non-functional requirements**
 
@@ -88,9 +91,10 @@ flowchart LR
 |---------|-------|--------|
 | User (iPhone) | Scanned PDF into iCloud folder | – |
 | iCloud Drive | Syncs file to the Mac | Receives the filed document |
-| OpenRouter (external, optional) | PDF + prompt – document content leaves the machine | `{date, sender, category, title}` |
-| Ollama (local, optional) | Page images + prompt – stays on the Mac (`localhost`) | `{date, sender, category, title}`; also lists and downloads models |
-| User (Mac UI) | Settings, key, templates, retry or trash inbox files | Inbox and history, status |
+| OpenRouter (external, optional) | PDF + prompt – document content leaves the machine. Only on request (F10, F11): folder paths and a few sample file names ("Suggest descriptions"), and PDFs of already filed documents ("Suggest names") | `{date, sender, category, title}`; folder descriptions |
+| Ollama (local, optional) | Page images + prompt – stays on the Mac (`localhost`). Only on request: the same folder paths, file names and page images of filed documents as for OpenRouter | `{date, sender, category, title}`; folder descriptions; also lists and downloads models |
+| Target directory | Read on request (Scan): folders, file counts and file names; no file content, except for the documents the user selects for "Suggest names" | Filed documents; files renamed in place after the user accepted the new name |
+| User (Mac UI) | Settings, key, templates, retry or trash inbox files; scan, map folders, accept or skip renames | Inbox and history, status, folder tree, rename queue |
 
 ### 3.2 Technical Context
 
@@ -149,13 +153,15 @@ flowchart TD
 | Page renderer | Main + hidden renderer | Ollama only: renders the first 3 pages of a PDF to PNG images with `pdf.js` in a hidden, sandboxed window that closes when idle (§5.3) |
 | Ollama client | Main | Finds Ollama, lists installed models, downloads a model with progress (`/api/pull`); checks that the server answers (§6.7) |
 | Filer | Main | Fills template (with fallbacks for missing values), sanitizes, creates target folders, resolves collisions (`_2`), `fs.rename` |
+| Scanner | Main | Reads the target folder recursively and read-only on request (`src/core/scanner/`); returns its folders (with file count and a few sample file names) and files; the result stays in memory (§5.4) |
+| Renamer | Main | Checks file names against the naming template, proposes new names through the Analyzer and renames accepted files in place (`src/core/renamer/`, §5.4) |
 | Imports | Main + UI | Unprocessed imports (files in the inbox) and processed imports (filed documents) in the SQLite database (§5.2); shown in the popover's Inbox and History views via IPC/preload |
 | Config | Main + UI | Provider, models, Ollama address, inbox path, target path, naming template, folder rules; stored in the SQLite database (the API key itself is kept in the Keychain) |
 | Onboarding | Main + UI | Provider choice; pasted API key and model name (default prefilled), or Ollama status and model download; connection test with a sample scan |
 | Notifier | Main | macOS notifications for filed and failed imports |
 | Logger | Main | Local log file for troubleshooting; opened from the tray |
 | Tray | Main | Menu-bar icon, no Dock icon, autostart. Clicking the icon opens the popover; its menu offers Settings…, Show logs and Quit |
-| UI | Renderer | React renderer with two surfaces: the menu-bar popover (Inbox and History views, search in the history, offline and paused state, quick actions) and a Settings window with the tabs General, Provider and Filing; plus the first-launch window (§6.4) |
+| UI | Renderer | React renderer with two surfaces: the menu-bar popover (Inbox and History views, search in the history, offline and paused state, quick actions) and a Settings window with the tabs General, Provider, Filing (with the folder tree, §5.4) and Names (the rename queue, §5.4); plus the first-launch window (§6.4) |
 
 ### 5.2 Import Data Handling
 
@@ -251,7 +257,37 @@ How it works:
 - On each import the rules are inserted into the prompt as a list of folders with their descriptions. The AI decides itself which description fits the document best; there is no keyword matching.
 - The `category` field of the schema is restricted to the configured folder names (`z.enum`), so the AI can only choose an existing folder. A fallback folder (e.g. `Unsorted`) is part of the list for documents that match no rule.
 - The Filer fills the naming template (e.g. `{category}/{date}_{sender}_{title}.pdf`) with the result (missing values replaced as above), sanitizes it, creates missing folders and moves the file.
-- Editing the rules changes the behaviour of the next import; already filed documents are not touched.
+- Editing the rules changes the behaviour of the next import; already filed documents are not touched (renaming them is a separate, user-started step, §5.4).
+
+### 5.4 Existing Folders: Folder Tree, Mapping and Rename Queue
+
+Many users already have a folder structure for their documents. Filey reads it on request, turns it into folder rules (F10) and helps rename existing files to the naming template (F11). Rules stay editable by hand through lists, buttons and the existing rule dialog; there is no chat (§9, decision 4).
+
+**Scanner**
+
+- Runs only when the user presses **Scan** or **Rescan**; the target folder is not watched (the inbox stays the Watcher's job). Only the current target folder is scanned; to scan another folder, the user changes the target folder first.
+- Reads the target folder recursively and read-only through the `FileSystem` port. It skips the inbox folder (if it lies below the target), hidden files and folders, and lists iCloud placeholders (`.name.pdf.icloud`) under their real name without downloading them.
+- Stops at a depth of 6 folder levels or after 5,000 entries; the UI then says that the scan was cut short.
+- Returns `{ folders: [{ path, fileCount, sampleFileNames }], files: [{ path }] }`, with paths relative to the target folder and `/` as separator. The result stays in memory in the main process and is not written to the database; Rescan rebuilds it, so no migration is needed.
+
+**Folder tree (Filing tab)**
+
+- The first field of the Filing tab shows the target folder as a tree. It merges the last scan result with the saved folder rules. Each folder is in one of three states: **has rule** (its description is shown), **no rule**, or **rule without folder** (a rule whose folder does not exist yet; the Filer creates it on the next filing).
+- Clicking a folder opens the existing rule dialog; there is no inline editing.
+- **Map folders** proposes `{folder, description}` for every folder without a rule. The default description is derived locally from the folder name. The user reviews, edits or drops the proposals and saves them.
+- **Suggest descriptions** (optional) sends only the folder paths and up to 5 sample file names per folder, no file content, to the selected provider in one `generateObject` call and fills the proposals with the answers.
+- Proposals are saved through the existing settings save (`settings.saveRules`), so rule validation and the `Unsorted` fallback stay unchanged.
+
+**Renamer (Names tab)**
+
+- **Check names** builds a pure matcher from the file-name part of the naming template (the part after the last `/`; `{category}` is not checked, because files stay in their folder): `{date}` matches `YYYY-MM-DD`, `{sender}` 1 to 10 characters, `{title}` any non-empty text, an optional collision suffix (`_2`) and `.pdf`. It lists the scanned PDFs whose names do not match. This runs locally and sends nothing.
+- **Suggest names:** for the files the user selects (at most 20 per batch), the Analyzer reads the document with the selected provider, exactly like an import (same privacy and cost, iCloud placeholders are downloaded first, for Ollama the first pages are rendered to images), and `renderPath` builds the new name. `{category}` is fixed to the file's current folder, so a file is renamed, never moved.
+- **Queue:** each file shows its current and proposed name, with **Accept**, **Skip** and **Accept all**. Nothing is renamed before Accept.
+- **Apply:** the file is renamed in its folder; an existing name is never overwritten, collisions get `_2`, `_3`, … like the Filer. If the file is in the history, its `processed_imports.target_path` is updated in the same step, so the duplicate check (§6.8) keeps finding it.
+
+**IPC**
+
+New `ipcMain.handle` channels for scan, rule suggestions, name check, name suggestions and apply. Every handler validates the sender and its arguments (`src/main/ipc/validate.ts`) and resolves every path so it stays inside the target folder.
 
 ---
 
@@ -323,6 +359,23 @@ How it works:
 5. A macOS notification tells the user that the file is a duplicate and stays in the inbox (e.g. "Duplicate: Scan_2026-10-16.pdf is already filed as 2026-10-15_TK_Invoice.pdf"); clicking it reveals the earlier document in Finder.
 6. The Inbox view shows the entry in the warning colour as "Duplicate of <filed name>", with "Show original" (reveals the earlier document in Finder) and "Move to Trash". Once the extra copy leaves the inbox, the entry disappears.
 
+### 6.9 Scenario: Scan and map folders
+
+1. The user sets the target folder to an existing document folder (e.g. `iCloud Drive/Documents`) and opens Settings → Filing.
+2. The user presses **Scan**. The Scanner reads the target folder (§5.4); the folder tree shows every folder with its rule state. Nothing is sent to the provider.
+3. The user presses **Map folders**. Filey proposes a rule for every folder without one, with a description derived from the folder name.
+4. Optionally the user presses **Suggest descriptions**: the folder paths and a few sample file names (no content) go to the selected provider, which returns a description per folder.
+5. The user edits or drops proposals and saves. The rules apply from the next import on; no file is moved.
+6. After changing folders in Finder, the user presses **Rescan**; the tree is rebuilt from scratch.
+
+### 6.10 Scenario: Check and fix names
+
+1. After a scan, the user opens Settings → Names and presses **Check names**. The PDFs whose names do not match the naming template are listed. Nothing is sent to the provider.
+2. The user selects files (at most 20 per batch) and presses **Suggest names**. Each file is analyzed like an import (§6.1 steps 2 and 5); its new name keeps the current folder.
+3. The queue shows the current and the proposed name per file. The user accepts, skips or accepts all.
+4. An accepted file is renamed in place; a collision gets `_2`. If the file is in the history, the history entry follows the new name.
+5. A file that changed or disappeared since the scan (e.g. iCloud is still syncing) is not renamed; the queue shows the error and the user can rescan.
+
 ---
 
 ## 7. Deployment View
@@ -365,11 +418,13 @@ User's Mac
 
 **File names:** NFC normalization (APFS returns NFD), sanitizing `/` and `:`, length limits, collisions resolved with `_2`.
 
-**Loop protection:** the target folder must not be the inbox itself. The inbox is watched without subfolders, so filed documents in a target tree below the inbox are not picked up again.
+**Loop protection:** the target folder must not be the inbox itself. The inbox is watched without subfolders, so filed documents in a target tree below the inbox are not picked up again. The Scanner skips the inbox folder when it lies below the target folder (§5.4).
+
+**Renaming existing files:** only after the user accepted the new name, only inside the target folder, only within the file's current folder, never overwriting an existing file (collisions get `_2`), and the history entry follows the file (§5.4, §6.10).
 
 **iCloud placeholders:** files "optimized" by macOS must be downloaded before reading.
 
-**Privacy:** with OpenRouter, document contents (including health data) go to OpenRouter and the underlying model provider. With Ollama they stay on the Mac: Filey only talks to the local address (the model download is done by Ollama itself). The README and `SECURITY.md` state this plainly. No telemetry, no backend.
+**Privacy:** with OpenRouter, document contents (including health data) go to OpenRouter and the underlying model provider. With Ollama they stay on the Mac: Filey only talks to the local address (the model download is done by Ollama itself). Scanning the target folder sends nothing; only when the user presses "Suggest descriptions" (folder paths and a few sample file names) or "Suggest names" (the selected documents, like an import) is anything sent to the selected provider (§5.4). The README and `SECURITY.md` state this plainly. No telemetry, no backend.
 
 **Process separation:** all I/O and AI calls in the main process; renderer only through preload/IPC.
 
@@ -412,6 +467,7 @@ User's Mac
 | 1 | Drizzle ORM on `node:sqlite` for the local database; migrations generated by `drizzle-kit` and bundled into the app | Typed schema and queries instead of hand-written SQL and row mapping; generated migrations; no native module (unlike `better-sqlite3`, which would need a rebuild for Electron and both architectures of the universal build); synchronous API, so the main process code stays simple. Prisma was rejected: it is made for servers (migrations through a CLI at deploy time, a separate query engine) and adds startup cost | The `node:sqlite` driver only exists in Drizzle 1.0, which is a release candidate; the version is pinned exactly (see §11 risk 9) |
 | 2 | Ollama through its native API (`ollama-ai-provider-v2`), not the OpenAI-compatible `/v1` endpoint | Model download, installed models and `num_ctx` are only available natively; the default context window on 16 GB Macs is too small for three page images, and `/v1` cannot set it per request | A generic OpenAI-compatible provider (LM Studio and others) is not part of this version; it can be added next to Ollama behind `createModel` |
 | 3 | Render PDF pages with `pdf.js` in a hidden, sandboxed renderer window | Local models do not accept PDFs; `pdf.js` needs a canvas, which the browser provides, so no native module (`canvas`, `sharp`) has to be built for both architectures of the universal app, and the main process stays free of CPU-heavy work | An extra renderer entry point and a hidden window that is created on demand; `pdfjs-dist` is a new, lazily loaded dependency |
+| 4 | Existing folders are mapped and files renamed through lists, buttons and the rule dialog, not through a chat; scan results are kept in memory, not in the database | Rules stay understandable and editable by hand; every change is reviewed before it is saved or applied. The target folder changes outside Filey (Finder, iCloud), so a stored scan would go stale; a rescan is cheap | The user presses Rescan after changing folders; no migration and no watcher on the target folder. No free-text editing of rules |
 
 ## 10. Quality Requirements
 
@@ -430,6 +486,9 @@ User's Mac
 | 9 | **Drizzle 1.0 is a release candidate:** the `node:sqlite` driver (`drizzle-orm/node-sqlite`) is only available in Drizzle 1.0, which is not final yet; its API or migration format may still change | `drizzle-orm` and `drizzle-kit` are pinned to an exact version; the database tests cover migrations and queries; move to 1.0 when it is released |
 | 10 | **Local models are slower and less accurate than cloud models:** a 7B vision model on a 16 GB Mac needs several seconds per page and may misread small print or confuse sender and recipient; the first request after a pause also loads the model into memory | Only the first 3 pages at 1024 px are sent; longer timeouts for Ollama; "Test connection" with the sample scan; model recommendation in the README |
 | 11 | **Ollama is a separate app:** it may not be installed or running, and its API and default settings can change between versions | Not running counts as offline (§6.7), so files wait; the native API is used only through `ollama-ai-provider-v2` and the three calls in the Ollama client; "Test connection" catches incompatible changes |
+| 12 | **Renaming while iCloud syncs:** a file can change, be evicted or move on another Mac between the scan and the rename | Rename only after Accept; check that the file still exists with the scanned name right before renaming; never overwrite; a failed rename is shown in the queue and the user rescans |
+| 13 | **Cost of many name suggestions:** with OpenRouter each suggested name costs like an import; with Ollama it takes several seconds per file | Name suggestions only for selected files, at most 20 per batch; Check names itself is local and free |
+| 14 | **Wrong suggestions:** the model can propose a wrong date, sender or title for an existing file, or an unfitting folder description | Every proposal is shown and reviewed before it is applied; files are never moved, only renamed in their folder |
 
 ---
 
@@ -437,4 +496,11 @@ User's Mac
 
 | Term | Meaning |
 |------|---------|
-|      |         |
+| Inbox | The folder Filey watches for new scans (without subfolders) |
+| Target folder | The folder Filey files documents into; the root of the folder tree |
+| Folder rule | A folder path (`/` separates nested folders) with a plain-language description of what belongs there (§5.3) |
+| Naming template | The pattern for filed paths, e.g. `{category}/{date}_{sender}_{title}.pdf` (F2) |
+| Scan | Reading the target folder's folders and file names on request; kept in memory only (§5.4) |
+| Folder tree | The Filing tab's view of the scanned target folder merged with the folder rules (§5.4) |
+| Map folders | Proposing folder rules for scanned folders that have none (§5.4) |
+| Rename queue | The list of proposed new names for existing files, each accepted or skipped by the user (§5.4) |
