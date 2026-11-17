@@ -44,7 +44,7 @@ export function connectPipelineEvents({ imports, settings, send }: EventBridgeDe
       sendState();
     }),
     imports.onHistoryChanged((change) => {
-      if (change.kind === 'remove') {
+      if (change.kind !== 'upsert') {
         send(IPC_CHANNELS.history.changed, change);
       } else {
         send(IPC_CHANNELS.history.changed, {

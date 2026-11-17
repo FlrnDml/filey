@@ -65,7 +65,7 @@ You only need to do this once per installed version.
 - **Your folders, described in plain language.** Folder rules such as "Insurance/Car: everything about my car insurance" tell the model where a document belongs. It can only choose one of your folders, or `Unsorted`.
 - **Naming template** with `{category}`, `{date}`, `{sender}` and `{title}`, for example `{category}/{date}_{sender}_{title}.pdf`. File names are cleaned up and never overwrite an existing file (`_2`, `_3`, …).
 - **Any OpenRouter model** that can read PDFs or images and return structured output. "Test connection" checks key and model with a bundled sample scan.
-- **Inbox and History.** The Inbox view lists the files still in your inbox: new, waiting, failed (with the reason and Retry) or duplicate, each with Move to Trash. The History view lists what was filed where, with search. The same scan saved twice is recognized as a duplicate (by its SHA-256 hash) and not sent again.
+- **Inbox and History.** The Inbox view lists the files still in your inbox: new, waiting, failed (with the reason and Retry) or duplicate, each with Move to Trash. The History view lists what was filed where, with search. The same scan saved twice is recognized as a duplicate (by its SHA-256 hash) and not sent again. **Clear history…** in the History view removes all entries; your filed documents stay where they are, but Filey no longer recognizes them as duplicates.
 - **Offline-aware.** Without a connection, new scans wait in the inbox and are filed once OpenRouter is reachable again.
 - **Notifications** for filed and failed imports. Clicking one reveals the file in Finder or opens the inbox.
 

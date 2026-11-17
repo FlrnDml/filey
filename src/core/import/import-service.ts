@@ -363,6 +363,18 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     },
     listHistory: (limit) => imports.processed.listRecent(limit),
     getHistoryEntry: (historyId) => imports.processed.getById(historyId),
+    clearHistory() {
+      const linked = imports.unprocessed.list().filter((row) => row.duplicateOfId !== null);
+      const removed = imports.processed.deleteAll();
+      historyChanged({ kind: 'clear' });
+      // Duplicates in the inbox no longer have an original to show.
+      for (const row of linked) {
+        const updated = imports.unprocessed.getById(row.id);
+        if (updated) inboxChanged({ kind: 'upsert', record: updated });
+      }
+      logger.log('info', `Import: history cleared (${removed} ${removed === 1 ? 'entry' : 'entries'})`);
+      return removed;
+    },
     onHistoryChanged(listener) {
       historyListeners.add(listener);
       return () => historyListeners.delete(listener);

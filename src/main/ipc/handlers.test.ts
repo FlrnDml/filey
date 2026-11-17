@@ -24,6 +24,7 @@ function setup(overrides: Partial<ServiceHandlerDeps> = {}) {
     handleRemoved: vi.fn((filePath: string) => void store.imports.unprocessed.deleteByPath(filePath)),
     listHistory: (limit: number) => store.imports.processed.listRecent(limit),
     getHistoryEntry: (id: number) => store.imports.processed.getById(id),
+    clearHistory: vi.fn(() => store.imports.processed.deleteAll()),
     getState: () => state.current,
     queuedCount: () => state.queued,
     analyzingId: () => state.analyzingId,
@@ -373,6 +374,17 @@ describe('history', () => {
     await expect(t.ipcMain.invoke(IPC_CHANNELS.history.revealInFinder, filed.id)).resolves.toEqual({ ok: true });
     expect(t.deps.shell.showItemInFolder).toHaveBeenCalledExactlyOnceWith('/target/Tax/a.pdf');
     for (const bad of ['7', 0, -1, 1.5, null]) await expect(t.ipcMain.invoke(IPC_CHANNELS.history.revealInFinder, bad)).rejects.toThrow();
+  });
+
+  it('clears the history without touching the filed files', async () => {
+    const t = setup();
+    t.addFiled({ contentHash: 'a' });
+    t.addFiled({ contentHash: 'b' });
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.history.clear)).resolves.toBeUndefined();
+    expect(t.deps.imports.clearHistory).toHaveBeenCalledOnce();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.history.list, { limit: 10 })).resolves.toEqual([]);
+    expect(t.deps.shell.trashItem).not.toHaveBeenCalled();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.history.clear, 'all')).rejects.toThrow();
   });
 
   it('refuses to reveal unknown documents, missing files and paths outside the folders', async () => {
