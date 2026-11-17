@@ -141,7 +141,7 @@ export function OllamaSetup({ api, settings, onSettings }: OllamaSetupProps) {
         {status?.running === false && OLLAMA_TEXT.notRunning}
       </p>
       {status?.running === false && (
-        <div className="settings-row settings-row--actions">
+        <div className="settings-row settings-row--actions settings-ollama-actions">
           <Button onClick={() => void api.ollama.openDownloadPage().catch(() => undefined)}>{OLLAMA_TEXT.getOllama}</Button>
         </div>
       )}
