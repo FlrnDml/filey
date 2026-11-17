@@ -186,7 +186,7 @@ Processed imports are kept for the history and the duplicate check:
 The popover has two views, switched with a segmented control (⌘1 / ⌘2):
 
 1. **Inbox:** the unprocessed imports, with their state, Retry, Show in Finder, Show original (duplicates) and Move to Trash. A badge on the tab counts the failed and duplicate entries. The popover opens on this view when the inbox has entries.
-2. **History:** the processed imports with search; Return reveals the filed document in Finder. The popover opens on this view when the inbox is empty.
+2. **History:** the processed imports with search; Return reveals the filed document in Finder. "Clear history…" removes all processed imports after a confirmation: the filed documents stay where they are, but are no longer duplicate-checked (§6.8), and inbox duplicates of them lose their original. The popover opens on this view when the inbox is empty.
 
 ### 5.3 Filing: Analysis and Folder Rules
 
