@@ -94,6 +94,20 @@ describe('renderPath', () => {
     expect(out).toBe('Finänzen/2026-10-15_Northwind_Müller Bäcker.pdf');
   });
 
+  it('decodes HTML entities returned by the model (issue #4)', () => {
+    expect(renderPath(TEMPLATE, { ...info, title: 'R&#xF6;ntgen' }, NOW)).toContain('_Röntgen.pdf');
+    expect(renderPath(TEMPLATE, { ...info, title: 'R&#246;ntgen' }, NOW)).toContain('_Röntgen.pdf');
+    expect(renderPath(TEMPLATE, { ...info, sender: 'M&#xFC;ller' }, NOW)).toContain('_Müller_');
+    expect(renderPath(TEMPLATE, { ...info, title: 'Mayer &amp; Sons' }, NOW)).toContain('_Mayer & Sons.pdf');
+  });
+
+  it('keeps decoded entities safe and leaves unknown ones alone', () => {
+    const out = renderPath(TEMPLATE, { ...info, title: '&#x2E;&#x2E;&#x2F;x &lt;y&gt;' }, NOW);
+    expect(out).toBe('Health/Health insurance/2026-10-15_Northwind_-x y.pdf');
+    expect(renderPath(TEMPLATE, { ...info, title: 'A &foo; &#x110000; B' }, NOW)).toContain('_A &foo; &#x110000; B.pdf');
+    expect(renderPath(TEMPLATE, { ...info, title: '&amp;lt;' }, NOW)).toContain('_&lt;.pdf');
+  });
+
   it('replaces / and : in sender and title, removes other illegal characters', () => {
     expect(renderPath(TEMPLATE, { ...info, sender: 'A/B', title: 'Re: 10/2026 "Offer"? <x>|*' }, NOW)).toBe(
       'Health/Health insurance/2026-10-15_A-B_Re- 10-2026 Offer x.pdf',
