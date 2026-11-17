@@ -1,10 +1,12 @@
 import { useId, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import type { ApiKeyStatus, FileyApi, Settings } from '../../../core/ipc';
-import { DEFAULT_MODEL } from '../../../core/settings/types';
+import { DEFAULT_MODEL, DEFAULT_OLLAMA_URL } from '../../../core/settings/types';
 import { Button, Icon, Input } from '../../components';
 import { cx } from '../../components/cx';
 import { Feedback, failed, saved, type FeedbackValue } from './Feedback';
 import { effectiveModel, modelFieldValue } from './format';
+import { OLLAMA_TEXT, OllamaSetup } from './OllamaSetup';
+import { ProviderChoice } from './ProviderChoice';
 
 export const PROVIDER_TEXT = {
   keyHint: 'Stored in your macOS Keychain. Only ever sent to OpenRouter.',
@@ -34,10 +36,131 @@ export interface ProviderTabProps {
 }
 
 /**
- * Provider tab (docs/design-system/components/SettingsProvider): OpenRouter key, optional model and
- * "Test connection" (arc42 §6.2). The renderer never sees a stored key, only its status (§6.6).
+ * Provider tab (docs/design-system/components/SettingsProvider): the choice between OpenRouter and Ollama, then
+ * that provider's settings and "Test connection" (arc42 §6.2). The renderer never sees a stored key, only its status (§6.6).
  */
-export function ProviderTab({ api, settings, keyStatus, onSettings, onKeyChanged }: ProviderTabProps) {
+export function ProviderTab(props: ProviderTabProps) {
+  const { api, settings, onSettings } = props;
+  const [error, setError] = useState<string | undefined>();
+
+  const choose = async (provider: Settings['provider']) => {
+    setError(undefined);
+    try {
+      const result = await api.settings.update({ provider });
+      if (result.ok) onSettings(result.settings);
+      else setError(result.error.message);
+    } catch {
+      setError('Filey could not change the provider.');
+    }
+  };
+
+  return (
+    <div className="settings-form">
+      <ProviderChoice value={settings.provider} onChange={(provider) => void choose(provider)} />
+      {error && (
+        <p role="alert" className="type-small settings-error">
+          {error}
+        </p>
+      )}
+      {settings.provider === 'ollama' ? <OllamaSettings api={api} settings={settings} onSettings={onSettings} /> : <OpenRouterSettings {...props} />}
+    </div>
+  );
+}
+
+/** Ollama's settings: its address, the model with download, and "Test connection". */
+function OllamaSettings({ api, settings, onSettings }: Pick<ProviderTabProps, 'api' | 'settings' | 'onSettings'>) {
+  const [urlDraft, setUrlDraft] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | undefined>();
+  const [test, setTest] = useState<TestState>({ phase: 'idle' });
+
+  const commitUrl = async () => {
+    if (urlDraft === null) return;
+    const next = urlDraft.trim() || DEFAULT_OLLAMA_URL;
+    if (next === settings.ollamaUrl) {
+      setUrlDraft(null);
+      return;
+    }
+    try {
+      const result = await api.settings.update({ ollamaUrl: next });
+      if (result.ok) {
+        setUrlDraft(null);
+        setUrlError(undefined);
+        onSettings(result.settings);
+      } else {
+        setUrlError(result.error.message);
+      }
+    } catch {
+      setUrlError('Filey could not save the address.');
+    }
+  };
+
+  const runTest = async () => {
+    if (test.phase === 'running') return;
+    setTest({ phase: 'running' });
+    let ok = false;
+    let message: string;
+    try {
+      const result = await api.connection.test({ provider: 'ollama', model: settings.ollamaModel });
+      ok = result.ok;
+      message = result.message;
+    } catch {
+      message = 'Filey could not run the connection test.';
+    }
+    setTest({ phase: 'done', ok, message, model: settings.ollamaModel });
+  };
+
+  return (
+    <>
+      <OllamaSetup api={api} settings={settings} onSettings={onSettings} />
+
+      <div className="settings-field">
+        <Input
+          label="Ollama address"
+          variant="mono"
+          placeholder={DEFAULT_OLLAMA_URL}
+          value={urlDraft ?? settings.ollamaUrl}
+          onChange={(event) => {
+            setUrlDraft(event.target.value);
+            setUrlError(undefined);
+          }}
+          onBlur={() => void commitUrl()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              void commitUrl();
+            }
+          }}
+          hint="Must point to this Mac. Only change it if you run Ollama on another port."
+          error={urlError}
+        />
+      </div>
+
+      <div className="settings-field settings-row settings-row--test">
+        <Button onClick={() => void runTest()} aria-busy={test.phase === 'running' || undefined}>
+          {test.phase === 'running' ? 'Testing…' : 'Test connection'}
+        </Button>
+        <p
+          role="status"
+          className={cx(
+            'type-small',
+            'settings-test-result',
+            test.phase === 'running' && 'settings-muted',
+            test.phase === 'done' && (test.ok ? 'settings-test-result--ok' : 'settings-test-result--failed'),
+          )}
+        >
+          {test.phase === 'running' && 'Sending the sample scan to Ollama. The first run loads the model and can take a minute…'}
+          {test.phase === 'done' && test.ok && <Icon name="check" size={16} />}
+          {test.phase === 'done' && test.message}
+        </p>
+      </div>
+
+      <p className="type-small settings-muted settings-privacy">{OLLAMA_TEXT.privacy}</p>
+    </>
+  );
+}
+
+/** OpenRouter's settings: the API key, an optional model and "Test connection". */
+function OpenRouterSettings({ api, settings, keyStatus, onSettings, onKeyChanged }: ProviderTabProps) {
   const [keyDraft, setKeyDraft] = useState('');
   const [keyError, setKeyError] = useState<string | undefined>();
   const [keyFeedback, setKeyFeedback] = useState<FeedbackValue | null>(null);
@@ -205,7 +328,7 @@ export function ProviderTab({ api, settings, keyStatus, onSettings, onKeyChanged
   const keyPlaceholder = keyStatus === 'set' ? PROVIDER_TEXT.keySaved : PROVIDER_TEXT.keyPlaceholder;
 
   return (
-    <div className="settings-form">
+    <>
       <div className="settings-field">
         <Input
           ref={keyInput}
@@ -313,6 +436,6 @@ export function ProviderTab({ api, settings, keyStatus, onSettings, onKeyChanged
       </div>
 
       <p className="type-small settings-muted settings-privacy">{PROVIDER_TEXT.privacy}</p>
-    </div>
+    </>
   );
 }

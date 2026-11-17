@@ -24,7 +24,7 @@ export const BLUR_TOGGLE_GRACE_MS = 300;
 
 export const SETTINGS_SIZE = { width: 620, height: 640 } as const;
 /** The first-launch window (docs/design-system/components/Onboarding: 300–480px wide, one step at a time). */
-export const ONBOARDING_SIZE = { width: 300, height: 580 } as const;
+export const ONBOARDING_SIZE = { width: 300, height: 700 } as const;
 
 export interface WindowManagerOptions {
   /** The renderer entry page and preload script (`rendererEntry()`). */

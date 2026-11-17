@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
-import { analyze } from '../core/analyzer';
+import { analyze as analyzeDocument } from '../core/analyzer';
 import { createApiKeyStore } from '../core/api-key';
 import { createConnectionTester } from '../core/connection-test';
 import { setupDefaultFolders } from '../core/folders';
@@ -7,6 +7,7 @@ import { createICloudPrepare } from '../core/icloud';
 import { createImportService } from '../core/import';
 import { IPC_CHANNELS, type EventChannel, type EventContract } from '../core/ipc';
 import { createAppLogger, createLogFile, syncDebugLogging, type LogFile } from '../core/logging';
+import { createOllamaClient, createOllamaService } from '../core/ollama';
 import type { Logger, NotificationTarget } from '../core/ports';
 import { createSettingsRepository } from '../core/settings';
 import { createWatcher } from '../core/watcher';
@@ -33,6 +34,8 @@ import { connectPipelineEvents } from './ipc/events';
 import { createAppHandlers, createOpenLogs, createServiceHandlers } from './ipc/handlers';
 import { broadcast, createSenderCheck, registerIpcHandlers } from './ipc/register';
 import { connectKeyPrompt, createNotificationClickHandler, startApp, type RunningServices } from './lifecycle';
+import { createPageRenderer } from './page-renderer';
+import { openRenderWindow } from './page-renderer-window';
 import { createAppTray, trayMenuTemplate, type AppTray } from './tray';
 import { connectTrayState } from './tray-state';
 import { isAppPageUrl, rendererEntry } from './window';
@@ -71,6 +74,16 @@ async function startServices({ windows, showInbox }: ServiceContext): Promise<Ru
   // First launch: create Filey/Inbox (iCloud Drive, else this Mac's Documents) before the watcher starts on it.
   const folderSetup = await setupDefaultFolders({ settings, fs: nodeFileSystem, home: electronPaths.home(), logger });
   const apiKeys = createApiKeyStore(createSafeStorageSecretStore(electronPaths));
+  // Ollama gets page images, not the PDF (arc42 §5.3); the hidden render window opens on first use and closes when idle.
+  const pageRenderer = createPageRenderer({ open: openRenderWindow });
+  const analyze: typeof analyzeDocument = (pdf, options) => analyzeDocument(pdf, options, { pageRenderer });
+  const ollamaClient = createOllamaClient({ fetch });
+  const ollama = createOllamaService({
+    client: ollamaClient,
+    getBaseUrl: () => settings.getSettings().ollamaUrl,
+    onProgress: (progress) => sendToWindows(IPC_CHANNELS.ollama.pullProgress, progress),
+    logger,
+  });
 
   const onNotificationClick = createNotificationClickHandler({
     getTargetPath: () => settings.getSettings().targetPath,
@@ -90,6 +103,7 @@ async function startServices({ windows, showInbox }: ServiceContext): Promise<Ru
     logger,
     clock: systemClock,
     connectivity: electronConnectivity,
+    localServer: ollamaClient,
     scheduler: timerScheduler,
   });
   const stopEvents = connectPipelineEvents({ imports: service, settings, send: sendToWindows });
@@ -126,7 +140,8 @@ async function startServices({ windows, showInbox }: ServiceContext): Promise<Ru
       apiKeys,
       imports: service,
       watcher,
-      testConnection: createConnectionTester({ analyze, loadSample: readSampleScan, apiKeys, settings }),
+      ollama,
+      testConnection: createConnectionTester({ analyze, loadSample: readSampleScan, apiKeys, settings, ollama: ollamaClient }),
       fs: nodeFileSystem,
       shell: electronShell,
       chooseFolder: chooseFolderDialog,
@@ -137,6 +152,8 @@ async function startServices({ windows, showInbox }: ServiceContext): Promise<Ru
       onSettingsChanged: (next) => {
         syncDebugLogging(logger, next);
         sendToWindows(IPC_CHANNELS.settings.changed, next);
+        // A new provider, key-less Ollama or a changed address can resume paused or waiting imports.
+        void service.providerChanged();
       },
       // Close after the reply went out, so the renderer's call resolves first.
       onOnboardingCompleted: () => setTimeout(() => windows.closeOnboarding(), 0),
@@ -152,6 +169,8 @@ async function startServices({ windows, showInbox }: ServiceContext): Promise<Ru
     },
     stop() {
       unregister();
+      ollama.cancelPull();
+      pageRenderer.dispose();
       stopTrayState?.();
       stopKeyPrompt();
       stopEvents();

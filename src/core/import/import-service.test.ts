@@ -66,6 +66,7 @@ function setup() {
   const clicks: (NotificationTarget | undefined)[] = [];
   const calls: { pdf: string; options: AnalyzeOptions }[] = [];
   let online = true;
+  let ollamaUp = true;
   let changeListener: (() => void) | undefined;
   let tick: (() => void) | undefined;
   let timers = 0;
@@ -93,6 +94,7 @@ function setup() {
     },
     logger,
     clock: { now: () => new Date(2026, 9, 15, 12, 0, 0) },
+    localServer: { isReachable: async () => ollamaUp },
     connectivity: {
       isOnline: () => online,
       onChange: (l) => {
@@ -131,6 +133,8 @@ function setup() {
     env,
     service,
     setOnline: (v: boolean) => (online = v),
+    setOllamaUp: (v: boolean) => (ollamaUp = v),
+    settings,
     wake: () => changeListener?.(),
     tick: () => tick?.(),
     timers: () => timers,
@@ -179,7 +183,7 @@ describe('import service', () => {
         path: '/target/Health/Health insurance/2026-10-15_Northwind_Invoice.pdf',
       },
     ]);
-    expect(t.calls[0]!.options.apiKey).toBe(API_KEY);
+    expect(t.calls[0]!.options.config).toEqual({ provider: 'openrouter', apiKey: API_KEY, model: 'google/gemini-2.5-flash' });
 
     expect(t.inboxChanges).toHaveLength(2);
     const [first, second] = t.inboxChanges;
@@ -796,3 +800,163 @@ describe('import service', () => {
     expect(t.service.getState().mode).toBe('offline');
   });
 });
+
+describe('import service with Ollama', () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  function ollamaSetup() {
+    const t = setup();
+    t.settings.updateSettings({ provider: 'ollama' });
+    return t;
+  }
+
+  it('files a document without any API key, with the saved address and model', async () => {
+    const t = ollamaSetup();
+    t.fs.add('/inbox/scan.pdf');
+    await t.service.handleFile('/inbox/scan.pdf');
+    expect(t.history()).toHaveLength(1);
+    expect(t.history()[0]).toMatchObject({ model: 'qwen2.5vl:7b' });
+    expect(t.calls[0]!.options.config).toEqual({ provider: 'ollama', baseUrl: 'http://localhost:11434', model: 'qwen2.5vl:7b' });
+    expect(t.service.getState().mode).toBe('running');
+  });
+
+  it('does not pause for a missing key, also not when the key disappears later', async () => {
+    const t = ollamaSetup();
+    await t.service.checkKey();
+    expect(t.service.getState()).toEqual({ mode: 'running' });
+    await t.apiKeys.set(API_KEY);
+    await t.apiKeys.clear();
+    expect(t.service.getState()).toEqual({ mode: 'running' });
+  });
+
+  it('queues without a model call while Ollama does not answer, even though the internet is up', async () => {
+    const t = ollamaSetup();
+    t.setOllamaUp(false);
+    t.fs.add('/inbox/a.pdf', 'A');
+    await t.service.handleFile('/inbox/a.pdf');
+    expect(t.calls).toHaveLength(0);
+    expect(t.service.getState().mode).toBe('offline');
+    expect(t.service.queuedCount()).toBe(1);
+    expect(t.inbox().map((r) => r.status)).toEqual(['pending']);
+    expect(t.notes).toHaveLength(0);
+    expect(t.logs.some((l) => l.includes('waiting for the Ollama server'))).toBe(true);
+  });
+
+  it('does not wait for the internet: Ollama keeps working while the Mac is offline', async () => {
+    const t = ollamaSetup();
+    t.setOnline(false);
+    t.fs.add('/inbox/a.pdf');
+    await t.service.handleFile('/inbox/a.pdf');
+    expect(t.history()).toHaveLength(1);
+    expect(t.service.getState().mode).toBe('running');
+  });
+
+  it('imports the waiting files in order once Ollama answers again (timer or wake)', async () => {
+    const t = ollamaSetup();
+    t.setOllamaUp(false);
+    t.fs.add('/inbox/a.pdf', 'A');
+    t.fs.add('/inbox/b.pdf', 'B');
+    await t.service.handleFile('/inbox/a.pdf');
+    await t.service.handleFile('/inbox/b.pdf');
+    expect(t.service.queuedCount()).toBe(2);
+
+    t.tick();
+    await flush();
+    expect(t.service.getState().mode).toBe('offline');
+
+    t.setOllamaUp(true);
+    t.wake();
+    await flush();
+    await t.service.handleFile('/inbox/none.pdf'); // waits for the drain
+    expect(t.service.getState().mode).toBe('running');
+    expect(t.timers()).toBe(0);
+    expect(t.calls.map((c) => c.pdf)).toEqual(['A', 'B']);
+    expect(t.history()).toHaveLength(2);
+  });
+
+  it('goes offline when the analysis reports the server as unreachable', async () => {
+    const t = ollamaSetup();
+    t.env.next = failure('offline');
+    t.fs.add('/inbox/a.pdf');
+    await t.service.handleFile('/inbox/a.pdf');
+    expect(t.service.getState().mode).toBe('offline');
+    expect(t.service.queuedCount()).toBe(1);
+  });
+
+  it('fails a timeout while Ollama answers (retrying would hang again) but queues it when Ollama is gone', async () => {
+    const t = ollamaSetup();
+    t.env.next = failure('timeout');
+    t.fs.add('/inbox/a.pdf');
+    await t.service.handleFile('/inbox/a.pdf');
+    expect(t.inbox().map((r) => r.status)).toEqual(['failed']);
+    expect(t.service.getState().mode).toBe('running');
+
+    t.env.during = () => t.setOllamaUp(false);
+    t.fs.add('/inbox/b.pdf', 'B');
+    await t.service.handleFile('/inbox/b.pdf');
+    expect(t.service.getState().mode).toBe('offline');
+    expect(t.service.queuedCount()).toBe(1);
+  });
+
+  it('checks the reachability of one server at a time', async () => {
+    const t = ollamaSetup();
+    t.setOllamaUp(false);
+    t.fs.add('/inbox/a.pdf');
+    await t.service.handleFile('/inbox/a.pdf');
+    t.wake();
+    t.wake();
+    t.tick();
+    await flush();
+    expect(t.service.getState().mode).toBe('offline');
+  });
+
+  describe('switching the provider', () => {
+    it('imports files that waited for a missing OpenRouter key once Ollama is chosen', async () => {
+      const t = setup();
+      t.fs.add('/inbox/a.pdf');
+      await t.service.handleFile('/inbox/a.pdf');
+      expect(t.service.getState()).toEqual({ mode: 'paused', reason: 'missing' });
+      expect(t.history()).toHaveLength(0);
+
+      t.settings.updateSettings({ provider: 'ollama' });
+      await t.service.providerChanged();
+      expect(t.service.getState()).toEqual({ mode: 'running' });
+      expect(t.history()).toHaveLength(1);
+      expect(t.calls[0]!.options.config.provider).toBe('ollama');
+    });
+
+    it('pauses when OpenRouter is chosen again and there is no key', async () => {
+      const t = ollamaSetup();
+      await t.service.providerChanged();
+      expect(t.service.getState().mode).toBe('running');
+      t.settings.updateSettings({ provider: 'openrouter' });
+      await t.service.providerChanged();
+      expect(t.service.getState()).toEqual({ mode: 'paused', reason: 'missing' });
+    });
+
+    it('leaves offline mode when the new provider can be reached', async () => {
+      const t = setup();
+      await t.apiKeys.set(API_KEY);
+      t.env.next = failure('offline');
+      t.fs.add('/inbox/a.pdf');
+      await t.service.handleFile('/inbox/a.pdf');
+      expect(t.service.getState().mode).toBe('offline');
+
+      t.env.next = { ok: true, info: INFO };
+      t.settings.updateSettings({ provider: 'ollama' });
+      await t.service.providerChanged();
+      await t.service.handleFile('/inbox/none.pdf'); // waits for the drain
+      expect(t.service.getState().mode).toBe('running');
+      expect(t.history()).toHaveLength(1);
+    });
+
+    it('never rejects', async () => {
+      const t = ollamaSetup();
+      t.settings.getSettings = () => {
+        throw new Error('boom');
+      };
+      await expect(t.service.providerChanged()).resolves.toBeUndefined();
+    });
+  });
+});
+

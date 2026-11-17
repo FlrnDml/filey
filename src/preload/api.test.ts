@@ -108,7 +108,7 @@ describe('createFileyApi', () => {
 
   it('exposes only the narrow namespaces, no raw ipcRenderer members', () => {
     const api = createFileyApi(new FakeIpcRenderer());
-    expect(Object.keys(api).sort()).toEqual(['apiKey', 'app', 'connection', 'dialogs', 'history', 'inbox', 'popover', 'settings', 'state']);
+    expect(Object.keys(api).sort()).toEqual(['apiKey', 'app', 'connection', 'dialogs', 'history', 'inbox', 'ollama', 'popover', 'settings', 'state']);
     for (const group of Object.values(api)) {
       for (const member of Object.values(group as Record<string, unknown>)) expect(typeof member).toBe('function');
     }

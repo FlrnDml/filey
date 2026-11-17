@@ -30,11 +30,38 @@ export function validateNamingTemplate(template: string): void {
   }
 }
 
+/** Hosts that mean "this Mac": documents sent to Ollama must not leave it (arc42 §8 "AI provider"). */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** Ollama model names such as `qwen2.5vl:7b` or `library/gemma3:4b`. */
+export const OLLAMA_MODEL_PATTERN = /^[A-Za-z0-9._:/-]{1,200}$/;
+
+/** Throws unless `value` is an `http(s)` address of this Mac, without credentials, path, query or fragment. Returns it without a trailing slash. */
+export function validateOllamaUrl(value: string): string {
+  const fail = (): never => {
+    throw new SettingsValidationError('The Ollama address must point to this Mac, e.g. http://localhost:11434.', 'ollamaUrl');
+  };
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    return fail();
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') fail();
+  if (!LOCAL_HOSTS.has(url.hostname)) fail();
+  if (url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '' || url.pathname !== '/') fail();
+  return url.origin;
+}
+
 export function validateSettings(settings: Settings): void {
   if (!(PROVIDERS as readonly string[]).includes(settings.provider)) {
     throw new SettingsValidationError(`Unsupported provider "${settings.provider}".`, 'provider');
   }
   if (settings.model.trim() === '') throw new SettingsValidationError('The model must not be empty.', 'model');
+  if (!OLLAMA_MODEL_PATTERN.test(settings.ollamaModel)) {
+    throw new SettingsValidationError('Enter an Ollama model name such as qwen2.5vl:7b.', 'ollamaModel');
+  }
+  validateOllamaUrl(settings.ollamaUrl);
   if (settings.inboxPath.trim() === '') throw new SettingsValidationError('The inbox folder must not be empty.', 'inboxPath');
   if (settings.targetPath.trim() === '') throw new SettingsValidationError('The target folder must not be empty.', 'targetPath');
   // Loop protection: the inbox is watched without subfolders, so only the inbox itself is forbidden as target.

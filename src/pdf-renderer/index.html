@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Hidden window that turns PDF pages into images for Ollama (arc42 §5.3). It never shows anything and never
+      talks to the network: scripts only from the app itself (no eval, no inline scripts), connect-src 'self'
+      only covers the dev server's hot-reload socket, images only as in-memory blobs.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; img-src blob: data:; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
+    />
+    <title>Filey page renderer</title>
+  </head>
+  <body></body>
+</html>

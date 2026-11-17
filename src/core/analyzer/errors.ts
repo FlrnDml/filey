@@ -9,9 +9,11 @@ export type AnalyzeFailure =
   | { kind: 'invalid_result'; message: string }
   /** The PDF can only be opened with a password, so no model can read it. Checked before anything is sent. */
   | { kind: 'password_protected'; message: string }
-  /** OpenRouter rejected the key (HTTP 401/403). */
+  /** Ollama only: the PDF's pages could not be rendered to images. */
+  | { kind: 'render_failed'; message: string }
+  /** OpenRouter rejected the key (HTTP 401/403). Never happens with Ollama. */
   | { kind: 'invalid_key'; message: string }
-  /** OpenRouter could not be reached. Not a failure: the import is queued (arc42 §6.7). */
+  /** The provider could not be reached (no internet, Ollama not running). Not a failure: the import is queued (arc42 §6.7). */
   | { kind: 'offline'; message: string }
   /**
    * No answer within the timeout. The import service queues it like `offline` when the Mac has no connection and
@@ -58,20 +60,21 @@ function isNetworkError(error: unknown): boolean {
   return false;
 }
 
-/** Maps anything thrown by `generateObject` to a typed failure. */
-export function classifyError(error: unknown): AnalyzeFailure {
+/** Maps anything thrown by `generateObject` to a typed failure. `provider` only decides the wording of the messages. */
+export function classifyError(error: unknown, provider: 'openrouter' | 'ollama' = 'openrouter'): AnalyzeFailure {
+  const name = provider === 'ollama' ? 'Ollama' : 'OpenRouter';
   for (const e of chain(error)) {
     if (APICallError.isInstance(e) && e.statusCode !== undefined) {
       if (e.statusCode === 401 || e.statusCode === 403) {
-        return { kind: 'invalid_key', message: 'OpenRouter rejected the API key' };
+        return { kind: 'invalid_key', message: `${name} rejected the API key` };
       }
-      return { kind: 'provider_error', message: `OpenRouter returned HTTP ${e.statusCode}`, statusCode: e.statusCode };
+      return { kind: 'provider_error', message: `${name} returned HTTP ${e.statusCode}`, statusCode: e.statusCode };
     }
   }
   for (const e of chain(error)) {
     if ((e as { name?: unknown }).name === 'TimeoutError') return { kind: 'timeout', message: 'The analysis timed out' };
   }
-  if (isNetworkError(error)) return { kind: 'offline', message: 'OpenRouter cannot be reached' };
+  if (isNetworkError(error)) return { kind: 'offline', message: `${name} cannot be reached` };
   for (const e of chain(error)) {
     if (NoObjectGeneratedError.isInstance(e) || TypeValidationError.isInstance(e) || JSONParseError.isInstance(e)) {
       return { kind: 'invalid_result', message: 'The model did not return a valid result' };

@@ -36,7 +36,12 @@ function setup(overrides: Partial<ServiceHandlerDeps> = {}) {
     watcher: { restart: vi.fn() },
     testConnection: vi.fn(async () => ({ ok: true as const, message: 'Connected · model can read PDFs' })),
     fs: { exists: async (p) => existing.has(p) },
-    shell: { showItemInFolder: vi.fn(), openPath: vi.fn(async () => ''), trashItem: vi.fn(async () => undefined) },
+    shell: { showItemInFolder: vi.fn(), openPath: vi.fn(async () => ''), trashItem: vi.fn(async () => undefined), openExternal: vi.fn(async () => undefined) },
+    ollama: {
+      status: vi.fn(async () => ({ running: true, models: ['qwen2.5vl:7b'] })),
+      pull: vi.fn(async () => ({ ok: true as const })),
+      cancelPull: vi.fn(),
+    },
     chooseFolder: vi.fn(async () => '/Users/u/Picked'),
     setLoginItem: vi.fn(),
     getLoginItem: vi.fn(() => true),
@@ -59,7 +64,13 @@ describe('handler coverage', () => {
     const app = registerFake(
       createAppHandlers({ getAppVersion: () => '1', quit: vi.fn(), openSettings: vi.fn(), openLogs: async () => ({ ok: true }), getLoginItem: () => false, hidePopover: vi.fn(), setPopoverHeight: vi.fn() }),
     );
-    const eventChannels: EventChannel[] = [IPC_CHANNELS.inbox.changed, IPC_CHANNELS.history.changed, IPC_CHANNELS.state.changed, IPC_CHANNELS.settings.changed];
+    const eventChannels: EventChannel[] = [
+      IPC_CHANNELS.inbox.changed,
+      IPC_CHANNELS.history.changed,
+      IPC_CHANNELS.state.changed,
+      IPC_CHANNELS.settings.changed,
+      IPC_CHANNELS.ollama.pullProgress,
+    ];
     const invokeChannels = Object.values(IPC_CHANNELS)
       .flatMap((group) => Object.values(group) as string[])
       .filter((c) => !(eventChannels as string[]).includes(c)) as InvokeChannel[];
@@ -257,6 +268,81 @@ describe('connection test', () => {
     await expect(t.ipcMain.invoke(IPC_CHANNELS.connection.test, { key: 1 })).rejects.toThrow();
     await expect(t.ipcMain.invoke(IPC_CHANNELS.connection.test, { url: 'https://evil' })).rejects.toThrow();
     expect(t.deps.testConnection).not.toHaveBeenCalled();
+  });
+});
+
+describe('provider settings', () => {
+  it('saves the provider, the Ollama model and the Ollama address, and broadcasts the change', async () => {
+    const t = setup();
+    const result = await t.ipcMain.invoke(IPC_CHANNELS.settings.update, { provider: 'ollama', ollamaModel: 'gemma3:4b', ollamaUrl: 'http://127.0.0.1:11500/' });
+    expect(result).toMatchObject({ ok: true, settings: { provider: 'ollama', ollamaModel: 'gemma3:4b', ollamaUrl: 'http://127.0.0.1:11500' } });
+    expect(t.deps.onSettingsChanged).toHaveBeenCalledOnce();
+  });
+
+  it('answers an address on another machine with a message for the address field and stores nothing', async () => {
+    const t = setup();
+    const result = await t.ipcMain.invoke(IPC_CHANNELS.settings.update, { provider: 'ollama', ollamaUrl: 'http://192.168.1.20:11434' });
+    expect(result).toMatchObject({ ok: false, error: { field: 'ollamaUrl' } });
+    expect(t.settings.getSettings()).toMatchObject({ provider: 'openrouter', ollamaUrl: 'http://localhost:11434' });
+    expect(t.deps.onSettingsChanged).not.toHaveBeenCalled();
+  });
+
+  it('answers an invalid model name with a message for the model field', async () => {
+    const t = setup();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.settings.update, { ollamaModel: 'two words' })).resolves.toMatchObject({ ok: false, error: { field: 'ollamaModel' } });
+  });
+
+  it('rejects an unknown provider and non-string values as a bug of the caller', async () => {
+    const t = setup();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.settings.update, { provider: 'lmstudio' })).rejects.toThrow();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.settings.update, { ollamaUrl: 5 })).rejects.toThrow();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.settings.update, { ollamaModel: 'x'.repeat(201) })).rejects.toThrow();
+  });
+
+  it('passes the provider of the connection test through and rejects an unknown one', async () => {
+    const t = setup();
+    await t.ipcMain.invoke(IPC_CHANNELS.connection.test, { provider: 'ollama', model: 'gemma3:4b' });
+    expect(vi.mocked(t.deps.testConnection).mock.calls).toEqual([[{ provider: 'ollama', model: 'gemma3:4b' }]]);
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.connection.test, { provider: 'nope' })).rejects.toThrow();
+  });
+});
+
+describe('ollama', () => {
+  it('reports the status', async () => {
+    const t = setup();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.ollama.status)).resolves.toEqual({ running: true, models: ['qwen2.5vl:7b'] });
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.ollama.status, 'x')).rejects.toThrow();
+  });
+
+  it('downloads a model by name and validates the name', async () => {
+    const t = setup();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.ollama.pull, 'qwen2.5vl:7b')).resolves.toEqual({ ok: true });
+    expect(t.deps.ollama.pull).toHaveBeenCalledWith('qwen2.5vl:7b');
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.ollama.pull)).rejects.toThrow();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.ollama.pull, '')).rejects.toThrow();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.ollama.pull, 'x'.repeat(201))).rejects.toThrow();
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.ollama.pull, 5)).rejects.toThrow();
+    expect(t.deps.ollama.pull).toHaveBeenCalledOnce();
+  });
+
+  it('cancels the download', async () => {
+    const t = setup();
+    await t.ipcMain.invoke(IPC_CHANNELS.ollama.cancelPull);
+    expect(t.deps.ollama.cancelPull).toHaveBeenCalledOnce();
+  });
+
+  it('opens the Ollama download page only, ignoring what the renderer sends', async () => {
+    const t = setup();
+    await t.ipcMain.invoke(IPC_CHANNELS.ollama.openDownloadPage);
+    expect(t.deps.shell.openExternal).toHaveBeenCalledWith('https://ollama.com/download');
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.ollama.openDownloadPage, 'https://evil.example')).rejects.toThrow();
+    expect(t.deps.shell.openExternal).toHaveBeenCalledOnce();
+  });
+
+  it('does not fail when the browser cannot be opened', async () => {
+    const t = setup();
+    vi.mocked(t.deps.shell.openExternal).mockRejectedValueOnce(new Error('no browser'));
+    await expect(t.ipcMain.invoke(IPC_CHANNELS.ollama.openDownloadPage)).resolves.toBeUndefined();
   });
 });
 

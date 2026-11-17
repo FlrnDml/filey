@@ -2,15 +2,19 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { APICallError, NoObjectGeneratedError, RetryError, type LanguageModel } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
-import { describe, expect, it } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { describe, expect, it, vi } from 'vitest';
 import type { FolderRule } from '../settings';
-import { analyze, type AnalyzeDeps } from './analyze';
-import { buildContent } from './buildContent';
+import { analyze, OLLAMA_MAX_EDGE_PX, OLLAMA_MAX_PAGES, type AnalyzeDeps } from './analyze';
+import { buildContent, buildImageContent } from './buildContent';
+import { createModel, OLLAMA_NUM_CTX, type ModelConfig } from './createModel';
 import { classifyError } from './errors';
 import { buildPrompt } from './prompt';
 import { createDocumentInfoSchema, folderNames } from './schema';
 
 const API_KEY = 'sk-or-v1-super-secret-key';
+const OPENROUTER: ModelConfig = { provider: 'openrouter', apiKey: API_KEY, model: 'test/model' };
 const PDF = Buffer.from('%PDF-1.4 fake document with secret contents');
 const RULES: FolderRule[] = [
   { folder: 'Insurance/Car', description: 'Everything about my car insurance' },
@@ -38,7 +42,7 @@ function mockModel(text: string | (() => Promise<never>)) {
 /** Runs the real `generateObject` against a mock model, so schema validation and message building are real. */
 function run(model: MockLanguageModelV4, rules = RULES) {
   const deps: AnalyzeDeps = { createModel: () => model as LanguageModel };
-  return analyze(PDF, { apiKey: API_KEY, model: 'test/model', rules }, deps);
+  return analyze(PDF, { config: OPENROUTER, rules }, deps);
 }
 
 const valid = { date: '2026-03-04', sender: 'Contoso', title: 'Invoice', category: 'Insurance/Car' };
@@ -108,7 +112,7 @@ describe('analyze', () => {
         new Promise((_, reject) => abortSignal?.addEventListener('abort', () => reject(abortSignal.reason as Error))),
     });
     const deps: AnalyzeDeps = { createModel: () => hanging as LanguageModel };
-    const result = await analyze(PDF, { apiKey: API_KEY, model: 'test/model', rules: RULES, timeoutMs: 20 }, deps);
+    const result = await analyze(PDF, { config: OPENROUTER, rules: RULES, timeoutMs: 20 }, deps);
     expect(result).toEqual({ ok: false, failure: { kind: 'timeout', message: 'The analysis timed out' } });
   });
 
@@ -116,14 +120,14 @@ describe('analyze', () => {
     const pdf = readFileSync(join(__dirname, 'fixtures', 'aes-256-user-password.pdf'));
     const model = mockModel(JSON.stringify(valid));
     const deps: AnalyzeDeps = { createModel: () => model as LanguageModel };
-    const result = await analyze(pdf, { apiKey: API_KEY, model: 'test/model', rules: RULES }, deps);
+    const result = await analyze(pdf, { config: OPENROUTER, rules: RULES }, deps);
     expect(result).toEqual({ ok: false, failure: { kind: 'password_protected', message: 'The PDF is password-protected' } });
     expect(model.doGenerateCalls).toHaveLength(0);
   });
 
   describe('with an injected generateObject', () => {
     const failWith = (error: unknown) =>
-      analyze(PDF, { apiKey: API_KEY, model: 'm', rules: RULES }, {
+      analyze(PDF, { config: OPENROUTER, rules: RULES }, {
         generateObject: (async () => {
           throw error;
         }) as unknown as AnalyzeDeps['generateObject'],
@@ -192,7 +196,7 @@ describe('analyze', () => {
         received = options;
         return { object: valid };
       }) as unknown as AnalyzeDeps['generateObject'];
-      const result = await analyze(PDF, { apiKey: API_KEY, model: 'm', rules: RULES }, { generateObject, createModel: () => ({}) as LanguageModel });
+      const result = await analyze(PDF, { config: OPENROUTER, rules: RULES }, { generateObject, createModel: () => ({}) as LanguageModel });
       expect(result).toEqual({ ok: true, info: valid });
       expect(received?.instructions).toBe(buildPrompt(RULES));
     });
@@ -259,5 +263,150 @@ describe('buildContent', () => {
     const content = buildContent(PDF, 'hello');
     expect(content[0]).toEqual({ type: 'text', text: 'hello' });
     expect(content[1]).toMatchObject({ type: 'file', mediaType: 'application/pdf' });
+  });
+});
+
+describe('analyze with Ollama', () => {
+  const OLLAMA: ModelConfig = { provider: 'ollama', baseUrl: 'http://localhost:11434', model: 'qwen2.5vl:7b' };
+  const PAGE_1 = new Uint8Array([137, 80, 78, 71, 1]);
+  const PAGE_2 = new Uint8Array([137, 80, 78, 71, 2]);
+
+  function runOllama(model: MockLanguageModelV4, pages: Uint8Array[] | Error = [PAGE_1, PAGE_2]) {
+    const render = vi.fn(async () => {
+      if (pages instanceof Error) throw pages;
+      return pages;
+    });
+    const deps: AnalyzeDeps = { createModel: () => model as LanguageModel, pageRenderer: { render } };
+    return { render, result: analyze(PDF, { config: OLLAMA, rules: RULES }, deps) };
+  }
+
+  it('renders the first pages and sends them as images, not as a PDF', async () => {
+    const model = mockModel(JSON.stringify(valid));
+    const { render, result } = runOllama(model);
+    await expect(result).resolves.toEqual({ ok: true, info: valid });
+    expect(render).toHaveBeenCalledWith(PDF, { maxPages: OLLAMA_MAX_PAGES, maxEdgePx: OLLAMA_MAX_EDGE_PX });
+    expect(OLLAMA_MAX_PAGES).toBe(3);
+    expect(OLLAMA_MAX_EDGE_PX).toBe(1024);
+
+    const user = model.doGenerateCalls[0]!.prompt.find((m) => m.role === 'user')!;
+    const parts = user.content as { type: string; mediaType?: string; data?: unknown }[];
+    expect(parts.filter((part) => part.type === 'file').map((part) => part.mediaType)).toEqual(['image/png', 'image/png']);
+    expect(parts.some((part) => part.mediaType === 'application/pdf')).toBe(false);
+    expect(parts[0]).toMatchObject({ type: 'text' });
+  });
+
+  it('fails with render_failed, without calling the model, when the pages cannot be rendered', async () => {
+    const model = mockModel(JSON.stringify(valid));
+    const { result } = runOllama(model, new Error('Invalid PDF structure at /Users/me/secret.pdf'));
+    const failure = await result;
+    expect(failure).toEqual({ ok: false, failure: { kind: 'render_failed', message: 'The PDF could not be turned into images' } });
+    expect(JSON.stringify(failure)).not.toContain('/Users/me');
+    expect(model.doGenerateCalls).toHaveLength(0);
+  });
+
+  it('fails with render_failed when no page comes back or no renderer is available', async () => {
+    const model = mockModel(JSON.stringify(valid));
+    await expect(runOllama(model, []).result).resolves.toMatchObject({ ok: false, failure: { kind: 'render_failed' } });
+    const noRenderer = await analyze(PDF, { config: OLLAMA, rules: RULES }, { createModel: () => model as LanguageModel });
+    expect(noRenderer).toMatchObject({ ok: false, failure: { kind: 'render_failed' } });
+    expect(model.doGenerateCalls).toHaveLength(0);
+  });
+
+  it('does not render a password-protected PDF', async () => {
+    const pdf = readFileSync(join(__dirname, 'fixtures', 'aes-256-user-password.pdf'));
+    const render = vi.fn();
+    const result = await analyze(pdf, { config: OLLAMA, rules: RULES }, { pageRenderer: { render } });
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'password_protected' } });
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('does not render anything for OpenRouter', async () => {
+    const render = vi.fn();
+    const deps: AnalyzeDeps = { createModel: () => mockModel(JSON.stringify(valid)) as LanguageModel, pageRenderer: { render } };
+    await analyze(PDF, { config: OPENROUTER, rules: RULES }, deps);
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('passes the model config on to createModel', async () => {
+    const seen: ModelConfig[] = [];
+    await analyze(PDF, { config: OLLAMA, rules: RULES }, {
+      createModel: (config) => {
+        seen.push(config);
+        return mockModel(JSON.stringify(valid)) as LanguageModel;
+      },
+      pageRenderer: { render: async () => [PAGE_1] },
+    });
+    expect(seen).toEqual([OLLAMA]);
+  });
+
+  it('names Ollama in its failures', async () => {
+    const refused = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
+    expect(classifyError(refused, 'ollama')).toEqual({ kind: 'offline', message: 'Ollama cannot be reached' });
+    expect(classifyError(refused)).toEqual({ kind: 'offline', message: 'OpenRouter cannot be reached' });
+    const http = new APICallError({ message: 'model not found', url: 'http://localhost:11434/api/chat', requestBodyValues: {}, statusCode: 404 });
+    expect(classifyError(http, 'ollama')).toEqual({ kind: 'provider_error', message: 'Ollama returned HTTP 404', statusCode: 404 });
+  });
+
+  it('gives a local model more time than a cloud model', async () => {
+    const hanging = new MockLanguageModelV4({
+      doGenerate: ({ abortSignal }) => new Promise((_, reject) => abortSignal?.addEventListener('abort', () => reject(abortSignal.reason as Error))),
+    });
+    // With an explicit timeout the analysis gives up; the defaults are only checked through the abort signal here.
+    const result = await analyze(PDF, { config: OLLAMA, rules: RULES, timeoutMs: 20 }, { createModel: () => hanging as LanguageModel, pageRenderer: { render: async () => [PAGE_1] } });
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'timeout' } });
+  });
+});
+
+describe('buildImageContent', () => {
+  it('puts the text first and the pages after it, in order', () => {
+    const a = new Uint8Array([1]);
+    const b = new Uint8Array([2]);
+    expect(buildImageContent([a, b], 'Classify')).toEqual([
+      { type: 'text', text: 'Classify' },
+      { type: 'file', data: 'AQ==', mediaType: 'image/png' },
+      { type: 'file', data: 'Ag==', mediaType: 'image/png' },
+    ]);
+    expect(buildImageContent([a])).toEqual([{ type: 'file', data: 'AQ==', mediaType: 'image/png' }]);
+  });
+
+  it('encodes a view into a larger buffer by its own bytes only', () => {
+    const view = new Uint8Array(new Uint8Array([9, 9, 7, 8, 9, 9]).buffer, 2, 2);
+    expect(buildImageContent([view])).toEqual([{ type: 'file', data: Buffer.from([7, 8]).toString('base64'), mediaType: 'image/png' }]);
+  });
+});
+
+describe('createModel', () => {
+  it('builds an OpenRouter and an Ollama model', () => {
+    expect(createModel(OPENROUTER)).toMatchObject({ modelId: 'test/model' });
+    expect(createModel({ provider: 'ollama', baseUrl: 'http://localhost:11434', model: 'qwen2.5vl:7b' })).toMatchObject({ modelId: 'qwen2.5vl:7b' });
+  });
+
+  it('asks Ollama for a context window that fits three page images', () => {
+    expect(OLLAMA_NUM_CTX).toBeGreaterThanOrEqual(8192);
+  });
+
+  it('talks to the native Ollama API below the saved address and sets num_ctx on each request', async () => {
+    const requests: { url: string; body: unknown }[] = [];
+    const server = createServer((req, res) => {
+      let data = '';
+      req.on('data', (chunk) => (data += chunk));
+      req.on('end', () => {
+        requests.push({ url: req.url ?? '', body: JSON.parse(data || '{}') });
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ model: 'qwen2.5vl:7b', created_at: new Date().toISOString(), message: { role: 'assistant', content: JSON.stringify(valid) }, done: true, done_reason: 'stop', prompt_eval_count: 1, eval_count: 1 }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const config: ModelConfig = { provider: 'ollama', baseUrl: `http://127.0.0.1:${port}`, model: 'qwen2.5vl:7b' };
+      const result = await analyze(PDF, { config, rules: RULES, timeoutMs: 10_000 }, { pageRenderer: { render: async () => [new Uint8Array([137, 80, 78, 71])] } });
+      expect(result).toEqual({ ok: true, info: valid });
+      expect(requests[0]!.url).toBe('/api/chat');
+      expect(requests[0]!.body).toMatchObject({ model: 'qwen2.5vl:7b', options: { num_ctx: OLLAMA_NUM_CTX } });
+      expect(JSON.stringify(requests[0]!.body)).toContain('"images"');
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });

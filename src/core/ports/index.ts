@@ -87,6 +87,22 @@ export interface Connectivity {
   onChange(listener: () => void): () => void;
 }
 
+/** Which pages of a PDF to render and how large. */
+export interface PageRenderOptions {
+  /** Only the first `maxPages` pages are rendered. */
+  maxPages: number;
+  /** The longer edge of every page image in pixels. */
+  maxEdgePx: number;
+}
+
+/**
+ * Turns the first pages of a PDF into PNG images (for Ollama, which does not accept PDFs; arc42 §5.3). Real
+ * implementation: a hidden, sandboxed window running pdf.js (`src/main/page-renderer.ts`). Rejects if the PDF cannot be rendered.
+ */
+export interface PageRenderer {
+  render(pdf: Uint8Array, options: PageRenderOptions): Promise<Uint8Array[]>;
+}
+
 /** Repeating timer, injectable so tests need no real waiting. Real implementation wraps `setInterval`. */
 export interface Scheduler {
   /** Calls `fn` every `ms` until the returned function is called. */
