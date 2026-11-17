@@ -258,3 +258,104 @@
 .settings-footer {
   margin-top: var(--space-2);
 }
+
+/* Folder tree (Filing tab, arc42 §5.4) */
+
+.settings-tree,
+.settings-tree__children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-tree {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.settings-tree__children {
+  padding-left: var(--space-6);
+}
+
+.settings-tree__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-1) var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.settings-tree > .settings-tree__item:first-child > .settings-tree__row {
+  border-top: 0;
+}
+
+.settings-tree__icon {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.settings-tree__name {
+  flex: none;
+  max-width: 180px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.settings-tree__state {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.settings-tree__state--open {
+  color: var(--warning);
+}
+
+.settings-tree__count {
+  flex: none;
+}
+
+.settings-map__folder {
+  overflow-wrap: anywhere;
+}
+
+/* Names tab: files to check and the rename queue */
+
+.settings-names {
+  max-height: 280px;
+  overflow: auto;
+  margin-top: var(--space-3);
+}
+
+.settings-names__file .filey-checkbox__label {
+  font: var(--type-mono);
+  overflow-wrap: anywhere;
+}
+
+.settings-queue__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-queue__names {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.settings-queue__old,
+.settings-queue__new {
+  overflow-wrap: anywhere;
+}
+
+.settings-queue__old {
+  color: var(--text-muted);
+}

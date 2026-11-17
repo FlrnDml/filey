@@ -11,12 +11,18 @@ import type {
   FolderSetup,
   HistoryRow,
   InboxRow,
+  NameCheckOutcome,
   OllamaPullResult,
   OllamaStatus,
+  RenameResult,
   SaveApiKeyResult,
+  ScanRunResult,
+  ScanView,
   Settings,
   SettingsError,
   SettingsPatch,
+  SuggestDescriptionsResult,
+  SuggestNamesOutcome,
 } from '../../core/ipc';
 
 export interface MockFileyOptions {
@@ -47,7 +53,43 @@ export interface MockFileyOptions {
   ollamaStatus?: OllamaStatus;
   /** What a model download answers. Default: finished. */
   pullModel?: (model: string) => Promise<OllamaPullResult>;
+  /** The scan main still has from before (Filing tab). Default: none. */
+  lastScan?: ScanView | null;
+  /** What Scan answers. Default: `MOCK_SCAN`. */
+  scan?: ScanRunResult;
+  /** What "Suggest descriptions" answers. Default: "About <folder>" for each folder. */
+  suggestDescriptions?: (folders: string[]) => SuggestDescriptionsResult;
+  /** What "Check names" answers. Default: `MOCK_NAME_CHECK`. */
+  nameCheck?: NameCheckOutcome;
+  /** What "Suggest names" answers. Default: `2026-10-15_Northwind_Invoice.pdf` for each file. */
+  suggestNames?: (paths: string[]) => SuggestNamesOutcome;
+  /** What Accept answers. Default: every file renamed. */
+  applyNames?: (paths: string[]) => RenameResult[];
 }
+
+export const MOCK_SCAN: ScanView = {
+  folders: [
+    { path: 'Health', fileCount: 0, sampleFileNames: [] },
+    { path: 'Health/Health insurance', fileCount: 3, sampleFileNames: ['2026-01-02_Northwind_Invoice.pdf'] },
+    { path: 'Taxes', fileCount: 2, sampleFileNames: ['Tax 2025.pdf'] },
+  ],
+  fileCount: 5,
+  truncated: false,
+  scannedAt: '2026-10-15T10:00:00.000Z',
+};
+
+export const MOCK_NAME_CHECK: NameCheckOutcome = {
+  ok: true,
+  checked: 5,
+  truncated: false,
+  issues: [
+    { path: 'Taxes/Tax 2025.pdf', name: 'Tax 2025.pdf', folder: 'Taxes', placeholder: false },
+    { path: 'Scan 12.pdf', name: 'Scan 12.pdf', folder: '', placeholder: true },
+  ],
+};
+
+const MOCK_NEW_NAME = '2026-10-15_Northwind_Invoice.pdf';
+const baseName = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
 export interface MockFiley {
   api: FileyApi;
@@ -100,6 +142,12 @@ export function createMockFiley({
   saveApiKey = () => ({ ok: true }),
   ollamaStatus = { running: true, version: '0.12.3', models: ['qwen2.5vl:7b'] },
   pullModel = async () => ({ ok: true }),
+  lastScan = null,
+  scan = { ok: true, scan: MOCK_SCAN },
+  suggestDescriptions = (folders) => ({ ok: true, rules: folders.map((folder) => ({ folder, description: `About ${folder}` })) }),
+  nameCheck = MOCK_NAME_CHECK,
+  suggestNames = (paths) => ({ ok: true, suggestions: paths.map((p) => ({ path: p, name: baseName(p), status: 'proposed', newName: MOCK_NEW_NAME })) }),
+  applyNames = (paths) => paths.map((p) => ({ path: p, ok: true, newName: MOCK_NEW_NAME, newPath: p.replace(baseName(p), MOCK_NEW_NAME) })),
 }: MockFileyOptions = {}): MockFiley {
   const appState: AppState = state ?? {
     mode: 'running',
@@ -186,6 +234,16 @@ export function createMockFiley({
     },
     state: { get: async () => appState, onChanged: on('state:changed') },
     dialogs: { chooseFolder: async () => chosenFolder },
+    folders: {
+      scan: async () => scan,
+      lastScan: async () => lastScan,
+      suggestDescriptions: async (folders) => suggestDescriptions(folders),
+    },
+    names: {
+      check: async () => nameCheck,
+      suggest: async (paths) => suggestNames(paths),
+      apply: async (paths) => applyNames(paths),
+    },
     popover: { hide: async () => undefined, setHeight: async () => undefined },
   };
 

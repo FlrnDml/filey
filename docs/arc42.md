@@ -273,17 +273,17 @@ Many users already have a folder structure for their documents. Filey reads it o
 **Folder tree (Filing tab)**
 
 - The first field of the Filing tab shows the target folder as a tree. It merges the last scan result with the saved folder rules. Each folder is in one of three states: **has rule** (its description is shown), **no rule**, or **rule without folder** (a rule whose folder does not exist yet; the Filer creates it on the next filing).
-- Clicking a folder opens the existing rule dialog; there is no inline editing.
+- Clicking a folder opens the existing rule dialog; there is no inline editing. A rule changed here (and the rules added by Map folders) is saved right away, on top of the saved rules; unsaved edits in the rule list below stay unsaved.
 - **Map folders** proposes `{folder, description}` for every folder without a rule. The default description is derived locally from the folder name. The user reviews, edits or drops the proposals and saves them.
 - **Suggest descriptions** (optional) sends only the folder paths and up to 5 sample file names per folder, no file content, to the selected provider in one `generateObject` call and fills the proposals with the answers.
 - Proposals are saved through the existing settings save (`settings.saveRules`), so rule validation and the `Unsorted` fallback stay unchanged.
 
 **Renamer (Names tab)**
 
-- **Check names** builds a pure matcher from the file-name part of the naming template (the part after the last `/`; `{category}` is not checked, because files stay in their folder): `{date}` matches `YYYY-MM-DD`, `{sender}` 1 to 10 characters, `{title}` any non-empty text, an optional collision suffix (`_2`) and `.pdf`. It lists the scanned PDFs whose names do not match. This runs locally and sends nothing.
+- **Check names** scans the target folder again (so the list is current) and builds a pure matcher from the file-name part of the naming template (the part after the last `/`; `{category}` is not checked, because files stay in their folder): `{date}` matches `YYYY-MM-DD`, `{sender}` 1 to 10 characters, `{title}` any non-empty text, an optional collision suffix (`_2`) and `.pdf`. It lists the scanned PDFs whose names do not match. This runs locally and sends nothing.
 - **Suggest names:** for the files the user selects (at most 20 per batch), the Analyzer reads the document with the selected provider, exactly like an import (same privacy and cost, iCloud placeholders are downloaded first, for Ollama the first pages are rendered to images), and `renderPath` builds the new name. `{category}` is fixed to the file's current folder, so a file is renamed, never moved.
 - **Queue:** each file shows its current and proposed name, with **Accept**, **Skip** and **Accept all**. Nothing is renamed before Accept.
-- **Apply:** the file is renamed in its folder; an existing name is never overwritten, collisions get `_2`, `_3`, … like the Filer. If the file is in the history, its `processed_imports.target_path` is updated in the same step, so the duplicate check (§6.8) keeps finding it.
+- **Apply:** main keeps the proposed names itself; the renderer only says which files to rename, never the new name. The file is renamed in its folder; an existing name is never overwritten, collisions get `_2`, `_3`, … like the Filer. If the file is in the history, its `processed_imports.target_path` is updated in the same step, so the duplicate check (§6.8) keeps finding it.
 
 **IPC**
 
@@ -370,7 +370,7 @@ New `ipcMain.handle` channels for scan, rule suggestions, name check, name sugge
 
 ### 6.10 Scenario: Check and fix names
 
-1. After a scan, the user opens Settings → Names and presses **Check names**. The PDFs whose names do not match the naming template are listed. Nothing is sent to the provider.
+1. The user opens Settings → Names and presses **Check names**. Filey scans the target folder again and lists the PDFs whose names do not match the naming template. Nothing is sent to the provider.
 2. The user selects files (at most 20 per batch) and presses **Suggest names**. Each file is analyzed like an import (§6.1 steps 2 and 5); its new name keeps the current folder.
 3. The queue shows the current and the proposed name per file. The user accepts, skips or accepts all.
 4. An accepted file is renamed in place; a collision gets `_2`. If the file is in the history, the history entry follows the new name.

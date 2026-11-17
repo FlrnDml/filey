@@ -39,3 +39,6 @@ export const DEFAULT_NAMING_TEMPLATE = '{category}/{date}_{sender}_{title}.pdf';
 
 /** Fallback folder for documents that match no rule; it can never be removed. */
 export const FALLBACK_FOLDER = 'Unsorted';
+
+/** Limits main accepts for folder rules from the renderer (`settings.saveRules`). */
+export const RULE_LIMITS = { rules: 200, folder: 255, description: 2000 } as const;

@@ -5,6 +5,7 @@ import { Tabs, type IconName } from '../../components';
 import { FilingTab } from './FilingTab';
 import { toDrafts, type RuleDraft } from './format';
 import { GeneralTab } from './GeneralTab';
+import { NamesTab } from './NamesTab';
 import { ProviderTab } from './ProviderTab';
 import './SettingsScreen.css';
 
@@ -12,6 +13,7 @@ const TAB_INFO: Record<SettingsTab, { label: string; icon: IconName }> = {
   general: { label: 'General', icon: 'gear' },
   provider: { label: 'Provider', icon: 'key' },
   filing: { label: 'Filing', icon: 'folder' },
+  names: { label: 'Names', icon: 'doc' },
 };
 
 const systemNow = () => new Date();
@@ -31,8 +33,8 @@ export interface SettingsScreenProps {
 }
 
 /**
- * Settings window (arc42 §5.1 "UI") with the tabs General, Provider and Filing. Fields save when they are
- * committed (blur, Return, a chosen folder); folder rules save with "Save rules".
+ * Settings window (arc42 §5.1 "UI") with the tabs General, Provider, Filing and Names. Fields save when they are
+ * committed (blur, Return, a chosen folder); folder rules save with "Save rules" (or right away from the folder tree).
  * Main switches the tab by changing the URL fragment; selecting a tab here writes it back, so the
  * window URL always names the visible tab.
  */
@@ -132,6 +134,8 @@ export function SettingsScreen({ initialTab, api = window.filey, now = systemNow
             now={now}
           />
         );
+      case 'names':
+        return <NamesTab api={api} settings={settings} />;
     }
   };
 

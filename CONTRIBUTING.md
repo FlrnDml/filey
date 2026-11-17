@@ -46,6 +46,19 @@ This is `electron-forge start`: Webpack builds the main process, the preload scr
 - The main process logs to the terminal and to `~/Library/Logs/Filey/filey.log`.
 - Quit an installed copy of Filey before you start the development version, so that the two do not watch the same inbox.
 
+## Code layout
+
+- `src/core/`: the app logic, free of Electron so it runs in unit tests. Everything outside the app (disk, Keychain, clock,
+  notifications) goes through the ports in `src/core/ports/`. Among others: `watcher/` (inbox), `analyzer/` (prompt,
+  provider, folder descriptions), `filer/` (naming template, moving files), `import/` (the import pipeline), `scanner/`
+  (reads the target folder for the folder tree and Map folders), `renamer/` (Check names, Suggest names, the rename queue),
+  `db/` (schema and migrations), `ipc.ts` (the typed IPC contract).
+- `src/main/`: the Electron main process: windows, tray, the adapters for the ports (`adapters/`) and the IPC handlers
+  (`ipc/`), which validate every call from the renderer.
+- `src/preload/`: the narrow `window.filey` API.
+- `src/renderer/`: the React screens (popover, Settings, onboarding) and the design-system components.
+- `src/pdf-renderer/`: the hidden window that renders PDF pages to images for Ollama.
+
 ## Making a change
 
 1. Fork the repository and create a branch.

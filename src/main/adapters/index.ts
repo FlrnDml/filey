@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { ICloudFiles } from '../../core/icloud';
+import type { ScanFileSystem } from '../../core/scanner';
 import type {
   AppPaths,
   Clock,
@@ -109,6 +110,15 @@ export const nodeFileSystem: FileSystem = {
     await fs.mkdir(p, { recursive: true });
   },
   remove: (p) => fs.unlink(p),
+};
+
+/** Read-only folder listing for the Scanner; symbolic links are reported as `other` and skipped there. */
+export const nodeScanFileSystem: ScanFileSystem = {
+  list: async (dir) =>
+    (await fs.readdir(dir, { withFileTypes: true })).map((entry) => ({
+      name: entry.name,
+      kind: entry.isFile() ? 'file' : entry.isDirectory() ? 'directory' : 'other',
+    })),
 };
 
 /** Runs `brctl download <path>`; rejects if `brctl` is missing, fails or exceeds the timeout. */

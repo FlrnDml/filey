@@ -71,6 +71,11 @@ export interface ImportService {
    * are; they are just no longer checked for duplicates. Inbox duplicates of them lose their "original".
    */
   clearHistory(): number;
+  /**
+   * A filed document was renamed in place from the rename queue (arc42 §5.4): its history entries follow the new path,
+   * so the duplicate check keeps finding it.
+   */
+  documentRenamed(from: string, to: string): void;
   /** Called after every history write or removal (feeds `history:changed`). Returns an unsubscribe function. */
   onHistoryChanged(listener: (change: HistoryChange) => void): () => void;
   /** Number of files waiting for the connection. */

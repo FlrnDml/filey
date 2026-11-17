@@ -1,14 +1,16 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
-import { analyze as analyzeDocument } from '../core/analyzer';
+import { analyze as analyzeDocument, describeFolders } from '../core/analyzer';
 import { createApiKeyStore } from '../core/api-key';
 import { createConnectionTester } from '../core/connection-test';
 import { setupDefaultFolders } from '../core/folders';
-import { createICloudPrepare } from '../core/icloud';
+import { createICloudPrepare, ensureDownloaded } from '../core/icloud';
 import { createImportService } from '../core/import';
 import { IPC_CHANNELS, type EventChannel, type EventContract } from '../core/ipc';
 import { createAppLogger, createLogFile, syncDebugLogging, type LogFile } from '../core/logging';
 import { createOllamaClient, createOllamaService } from '../core/ollama';
 import type { Logger, NotificationTarget } from '../core/ports';
+import { createRenamer } from '../core/renamer';
+import { createScanService } from '../core/scanner';
 import { createSettingsRepository } from '../core/settings';
 import { createWatcher } from '../core/watcher';
 import {
@@ -25,12 +27,14 @@ import {
   nodeFileSystem,
   nodeICloudFiles,
   nodeLogFileSystem,
+  nodeScanFileSystem,
   readSampleScan,
   systemClock,
   timerScheduler,
 } from './adapters';
 import { openAppDatabase } from './db';
 import { connectPipelineEvents } from './ipc/events';
+import { createFolderHandlers } from './ipc/folder-handlers';
 import { createAppHandlers, createOpenLogs, createServiceHandlers } from './ipc/handlers';
 import { broadcast, createSenderCheck, registerIpcHandlers } from './ipc/register';
 import { connectKeyPrompt, createNotificationClickHandler, startApp, type RunningServices } from './lifecycle';
@@ -117,6 +121,7 @@ async function startServices({ windows, showInbox }: ServiceContext): Promise<Ru
   });
   await service.checkKey();
 
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
   const watcher = createWatcher({
     inboxPath: settings.getSettings().inboxPath,
     onFile: (filePath) => service.handleFile(filePath),
@@ -127,11 +132,31 @@ async function startServices({ windows, showInbox }: ServiceContext): Promise<Ru
       files: nodeICloudFiles,
       downloader: brctlDownloader,
       clock: systemClock,
-      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      sleep,
       logger,
     }),
   });
   watcher.start();
+
+  // Existing folders and the rename queue (arc42 §5.4): read-only scans on request, renames only after Accept.
+  const scans = createScanService({ fs: nodeScanFileSystem, settings, clock: systemClock, logger });
+  const renamer = createRenamer({
+    scans,
+    settings,
+    apiKeys,
+    analyze,
+    fs: nodeFileSystem,
+    download: (realPath) =>
+      ensureDownloaded(realPath, { files: nodeICloudFiles, downloader: brctlDownloader, clock: systemClock, sleep, logger }, { timeoutMs: 120_000 }),
+    onRenamed: (from, to) => service.documentRenamed(from, to),
+    clock: systemClock,
+    logger,
+  });
+  const unregisterFolders = registerIpcHandlers(
+    ipcMain,
+    createFolderHandlers({ scans, renamer, settings, apiKeys, describeFolders: (folders, config) => describeFolders(folders, config), logger }),
+    ipcOptions,
+  );
 
   const unregister = registerIpcHandlers(
     ipcMain,
@@ -169,6 +194,7 @@ async function startServices({ windows, showInbox }: ServiceContext): Promise<Ru
     },
     stop() {
       unregister();
+      unregisterFolders();
       ollama.cancelPull();
       pageRenderer.dispose();
       stopTrayState?.();

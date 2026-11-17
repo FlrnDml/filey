@@ -22,7 +22,7 @@ export function createFileyApi(ipcRenderer: IpcRendererLike): FileyApi {
     return () => ipcRenderer.removeListener(channel, wrapped);
   };
 
-  const { app, settings, apiKey, connection, ollama, inbox, history, state, dialogs, popover } = IPC_CHANNELS;
+  const { app, settings, apiKey, connection, ollama, inbox, history, state, dialogs, popover, folders, names } = IPC_CHANNELS;
 
   return {
     app: {
@@ -78,6 +78,16 @@ export function createFileyApi(ipcRenderer: IpcRendererLike): FileyApi {
     },
     dialogs: {
       chooseFolder: (kind) => invoke(dialogs.chooseFolder, kind),
+    },
+    folders: {
+      scan: () => invoke(folders.scan),
+      lastScan: () => invoke(folders.lastScan),
+      suggestDescriptions: (list) => invoke(folders.suggestDescriptions, list),
+    },
+    names: {
+      check: () => invoke(names.check),
+      suggest: (paths) => invoke(names.suggest, paths),
+      apply: (paths) => invoke(names.apply, paths),
     },
     popover: {
       hide: () => invoke(popover.hide),

@@ -6,7 +6,8 @@ import { Button, Input } from '../../components';
 import { cx } from '../../components/cx';
 import { Feedback, failed, saved, type FeedbackValue } from './Feedback';
 import { FolderRules, type FolderRulesProps } from './FolderRules';
-import { displayPath } from './format';
+import { FolderTree } from './FolderTree';
+import { displayPath, upsertDrafts } from './format';
 
 /** The sample document of the naming-template preview (date: today). */
 export const SAMPLE_DOCUMENT = { sender: 'Northwind', title: 'Invoice' } as const;
@@ -28,7 +29,10 @@ export interface FilingTabProps {
   now: () => Date;
 }
 
-/** Filing tab (docs/design-system/components/SettingsFiling): folders, naming template and folder rules. */
+/**
+ * Filing tab (docs/design-system/components/SettingsFiling): the target folder as a tree (arc42 §5.4), the folders,
+ * the naming template and the folder rules.
+ */
 export function FilingTab({ api, settings, onSettings, rules, rulesEditor, now }: FilingTabProps) {
   const [folderFeedback, setFolderFeedback] = useState<Partial<Record<FolderKind, FeedbackValue>>>({});
   const [templateDraft, setTemplateDraft] = useState<string | null>(null);
@@ -99,6 +103,17 @@ export function FilingTab({ api, settings, onSettings, rules, rulesEditor, now }
 
   return (
     <div className="settings-form">
+      <FolderTree
+        api={api}
+        settings={settings}
+        rules={rules}
+        onSaved={(next, changes) => {
+          rulesEditor.onSaved(next);
+          // The rule list below follows; its other unsaved edits stay.
+          rulesEditor.setDrafts((prev) => (prev ? upsertDrafts(prev, changes) : prev));
+        }}
+      />
+
       {(['inbox', 'target'] as const).map((kind) => (
         <FolderField
           key={kind}

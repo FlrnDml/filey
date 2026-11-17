@@ -5,6 +5,7 @@ import type { ImportState } from '../../core/import';
 import { IPC_CHANNELS, type EventChannel, type InvokeChannel } from '../../core/ipc';
 import { createSettingsRepository, defaultRules } from '../../core/settings';
 import { createAppHandlers, createOpenLogs, createServiceHandlers, USER_MESSAGES, type ServiceHandlerDeps } from './handlers';
+import { createFolderHandlers } from './folder-handlers';
 import { registerFake } from './testing';
 
 const API_KEY = 'sk-or-SECRET-KEY-123';
@@ -75,7 +76,17 @@ describe('handler coverage', () => {
     const invokeChannels = Object.values(IPC_CHANNELS)
       .flatMap((group) => Object.values(group) as string[])
       .filter((c) => !(eventChannels as string[]).includes(c)) as InvokeChannel[];
-    const handled = [...t.ipcMain.listeners.keys(), ...app.ipcMain.listeners.keys()];
+    const folders = registerFake(
+      createFolderHandlers({
+        scans: { run: vi.fn(), last: () => undefined },
+        renamer: { check: vi.fn(), suggest: vi.fn(), apply: vi.fn() },
+        settings: t.settings,
+        apiKeys: t.apiKeys,
+        describeFolders: vi.fn(),
+        logger: { log: () => undefined },
+      }),
+    );
+    const handled = [...t.ipcMain.listeners.keys(), ...app.ipcMain.listeners.keys(), ...folders.ipcMain.listeners.keys()];
     expect(handled.sort()).toEqual([...invokeChannels].sort());
   });
 });
