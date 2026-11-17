@@ -2,6 +2,8 @@ version: 2
 
 # One pull request per week with every available update (npm and GitHub Actions together).
 # Review and merge it with the `dependency-updates` skill (.claude/skills/dependency-updates/SKILL.md).
+# `open-pull-requests-limit: 1` on both entries below keeps Dependabot from opening a second weekly pull request
+# while one is still open; merge or close the open one first (ask Dependabot to refresh it with `@dependabot rebase`).
 multi-ecosystem-groups:
   weekly-updates:
     schedule:
@@ -17,6 +19,7 @@ updates:
     directory: /
     multi-ecosystem-group: weekly-updates
     patterns: ['*']
+    open-pull-requests-limit: 1
     ignore:
       # Pinned on purpose: Drizzle 1.0 is a release candidate (arc42 §11, risk 9).
       - dependency-name: drizzle-orm
@@ -32,3 +35,4 @@ updates:
     directory: /
     multi-ecosystem-group: weekly-updates
     patterns: ['*']
+    open-pull-requests-limit: 1

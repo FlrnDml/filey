@@ -15,8 +15,11 @@ Invoking this skill is the user's explicit request to merge the pull request onc
 ## Steps
 
 1. **Find the pull request.** `mcp__github__list_pull_requests` (state open) for the `dependabot[bot]` PR with the
-   `dependencies` label. None open: say so and stop. More than one (for example an older weekly PR): the newest wins;
-   close the older ones with a comment pointing to it.
+   `dependencies` label. None open: say so and stop. More than one (for example an older weekly PR): compare the
+   package lists and changed files. Close an older PR, with a comment pointing to the newer one, **only if** the newer one
+   covers every package in it. If the older one has updates the newer one lacks (for example the GitHub Actions bumps
+   when the newer PR is npm only), do not close it: handle the PRs oldest first, and comment `@dependabot rebase` on
+   each remaining one after a merge to clear its stale lockfile and workflow changes.
 2. **Read the update list** in the PR description. Sort it into patch/minor and **major** bumps. Look at the release notes
    linked for each major bump (and for `electron`, `ai`, `@openrouter/ai-sdk-provider`, `zod`, `typescript`,
    `@electron-forge/*`, which can break the app or the build): note breaking changes that touch filey's code.
