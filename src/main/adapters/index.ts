@@ -148,15 +148,22 @@ export function createSafeStorageSecretStore(paths: AppPaths, files: FileSystem 
     await files.writeFile(file(), JSON.stringify(data));
   };
 
+  const set = async (key: string, value: string) => {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) throw new Error('Secure storage is not available');
+    await save({ ...(await load()), [key]: (await safeStorage.encryptStringAsync(value)).toString('base64') });
+  };
+
   return {
     async get(key) {
       const encrypted = (await load())[key];
-      return encrypted === undefined ? undefined : safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
+      if (encrypted === undefined) return undefined;
+      const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(Buffer.from(encrypted, 'base64'));
+      // The key was rotated: store the value again under the new key. The value itself was read fine,
+      // so a failure here must not make the lookup fail; the next read tries again.
+      if (shouldReEncrypt) await set(key, result).catch(() => undefined);
+      return result;
     },
-    async set(key, value) {
-      if (!safeStorage.isEncryptionAvailable()) throw new Error('Secure storage is not available');
-      await save({ ...(await load()), [key]: safeStorage.encryptString(value).toString('base64') });
-    },
+    set,
     async delete(key) {
       const data = await load();
       delete data[key];
