@@ -408,6 +408,12 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       logger.log('info', `Import: history cleared (${removed} ${removed === 1 ? 'entry' : 'entries'})`);
       return removed;
     },
+    documentRenamed(from, to) {
+      for (const record of imports.processed.updateTargetPath(from, to)) {
+        historyChanged({ kind: 'upsert', record });
+        logger.log('info', `Import: history entry ${record.id} follows its renamed document ${path.basename(to)}`);
+      }
+    },
     onHistoryChanged(listener) {
       historyListeners.add(listener);
       return () => historyListeners.delete(listener);

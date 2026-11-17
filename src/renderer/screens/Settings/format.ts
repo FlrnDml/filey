@@ -46,6 +46,24 @@ export function fromDrafts(drafts: readonly RuleDraft[]): FolderRule[] {
   return drafts.map(({ folder, description }) => ({ folder: folder.trim(), description: description.trim() }));
 }
 
+/**
+ * Applies rules that were just saved from the folder tree to the rules being edited: a draft for the same folder gets
+ * the new description, other folders are added above the fallback. Other unsaved edits stay as they are.
+ */
+export function upsertDrafts(drafts: readonly RuleDraft[], changes: readonly FolderRule[]): RuleDraft[] {
+  const key = (folder: string) => folder.trim().normalize('NFC').toLowerCase();
+  const next = drafts.map((draft) => ({ ...draft }));
+  const added: RuleDraft[] = [];
+  for (const change of changes) {
+    const existing = [...next, ...added].find((draft) => key(draft.folder) === key(change.folder));
+    if (existing) existing.description = change.description;
+    else added.push({ ...newDraft(), folder: change.folder, description: change.description });
+  }
+  const fallback = next.findIndex((draft) => draft.fallback);
+  const at = fallback === -1 ? next.length : fallback;
+  return [...next.slice(0, at), ...added, ...next.slice(at)];
+}
+
 /** Whether the edited rules differ from the saved ones (ignoring surrounding spaces). */
 export function rulesChanged(drafts: readonly RuleDraft[], saved: readonly FolderRule[]): boolean {
   const edited = fromDrafts(drafts);

@@ -30,7 +30,7 @@ Every window loads the same entry page (`index.html` + `index.tsx`); the URL fra
 | Fragment | Screen | Window (src/main/windows.ts) |
 |----------|--------|------------------------------|
 | `#popover` | `screens/Popover/` | frameless popover under the tray icon, opened by a tray click |
-| `#settings/<general\|provider\|filing>` | `screens/Settings/` | Settings window, `window.filey.app.openSettings(tab)` |
+| `#settings/<general\|provider\|filing\|names>` | `screens/Settings/` | Settings window, `window.filey.app.openSettings(tab)` |
 | `#onboarding` | `screens/Onboarding/` | first-launch window, opened by main on start while `onboardingCompleted` is false; "Got it" calls `app.completeOnboarding()` and main closes it |
 
 Main accepts IPC only from the entry page with exactly one of these fragments (`isAppPage` in
@@ -41,9 +41,11 @@ tests pass `createMockFiley()` from `test/mockFiley.ts` (the onboarding screen a
 so tests can start on a later step).
 
 The Settings screen (`screens/Settings/`) has one component per tab (`GeneralTab`, `ProviderTab`, `FilingTab` with
-`FolderRules`). Fields save when they are committed (blur, Return, a chosen folder) and show their result in words
-right below; folder rules save together with "Save rules". The renderer imports only pure core modules
-(`core/settings/types`, `core/filer/naming` for the template preview); anything with Node imports stays in main.
+`FolderTree` and `FolderRules`, `NamesTab`). Fields save when they are committed (blur, Return, a chosen folder) and show
+their result in words right below; folder rules save together with "Save rules", while a rule changed in the folder tree
+or added by Map folders is saved right away. The renderer imports only pure core modules (`core/settings/types`,
+`core/filer/naming` for the template preview, `core/scanner/tree` and `core/scanner/mapping` for the folder tree,
+`core/renamer/types`); anything with Node imports stays in main.
 
 ## Content-Security-Policy
 `index.html` sets a CSP meta tag for all windows: scripts only from the app (no inline scripts, no eval),

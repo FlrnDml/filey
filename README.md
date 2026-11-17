@@ -65,6 +65,8 @@ You only need to do this once per installed version.
 - **Menu bar only.** No Dock icon and no main window. Click the scanner icon for the popover with your inbox and your history; right-click it for more.
 - **Files new PDFs automatically.** Filey watches the inbox folder (not its subfolders), waits until a file has finished syncing, downloads iCloud placeholders first, and then files the PDF.
 - **Your folders, described in plain language.** Folder rules such as "Insurance/Car: everything about my car insurance" tell the model where a document belongs. It can only choose one of your folders, or `Unsorted`.
+- **Start from the folders you already have.** Scan the target folder to see it as a tree with the rule of each folder, and turn your existing folders into folder rules with **Map folders**.
+- **Fix old file names.** **Check names** lists the PDFs whose names do not follow your naming template; Filey proposes a new name for the files you pick and renames each one only after you accept it, in its own folder.
 - **Naming template** with `{category}`, `{date}`, `{sender}` and `{title}`, for example `{category}/{date}_{sender}_{title}.pdf`. File names are cleaned up and never overwrite an existing file (`_2`, `_3`, …).
 - **Local or cloud AI, your choice.** Run a model on your Mac with Ollama, or use any OpenRouter model that can read PDFs or images and return structured output. "Test connection" checks provider, model and scan reading with a bundled sample scan. With Ollama, Filey reads the first three pages of each document as images.
 - **Inbox and History.** The Inbox view lists the files still in your inbox: new, waiting, failed (with the reason and Retry) or duplicate, each with Move to Trash. The History view lists what was filed where, with search. The same scan saved twice is recognized as a duplicate (by its SHA-256 hash) and not sent again. **Clear history…** in the History view removes all entries; your filed documents stay where they are, but Filey no longer recognizes them as duplicates.
@@ -89,7 +91,8 @@ If iCloud Drive is off or the folder cannot be created there, the last step says
 | --- | --- |
 | General | Start at login, debug logging, Show logs, the Filey version |
 | Provider | OpenRouter or Ollama; for OpenRouter the API key (save or remove) and model; for Ollama the model (with Download model), the address of Ollama and Test connection |
-| Filing | Inbox folder, target folder, naming template (with a live preview), folder rules |
+| Filing | The target folder as a tree (Scan, Rescan, Map folders), inbox folder, target folder, naming template (with a live preview), folder rules |
+| Names | Check names, Suggest names and the rename queue (Accept, Skip, Accept all) |
 
 <p align="center"><img src="docs/images/settings-provider.png" width="440" alt="Settings, Provider tab: API key stored in the Keychain, model, Test connection passed, privacy note"></p>
 
@@ -102,6 +105,12 @@ If iCloud Drive is off or the folder cannot be created there, the last step says
 - Ollama keeps the model in memory for a few minutes after the last scan, then frees it.
 
 **Folder rules.** Each rule is a folder below the target folder (use `/` for subfolders, e.g. `Health/Health insurance`) and a description of what belongs there. The descriptions go into the prompt and the model picks the best match. `Unsorted` is the fallback for documents that match no rule and cannot be removed. Changes apply to the next import; already filed documents are not moved.
+
+**Use an existing folder.** If you already sort your documents into folders (for example `iCloud Drive/Documents`), make that folder the target folder in Settings → Filing and click **Scan**. Filey reads the folder and file names (not the files) and shows the folders as a tree: each one either has a rule (its description is shown), has **No rule** yet, or is a rule whose folder Filey creates on the next filing. Click **Add rule** or **Edit rule** on a folder to describe it; the rule is saved right away.
+
+**Map folders** proposes a rule for every folder without one, with a description made from the folder name; folders that hold files are selected. Change the descriptions, or click **Suggest descriptions** to let your AI provider write them from the folder names and up to five file names per folder, then **Add rules**. Nothing is sent before you click Suggest descriptions. After you change folders in Finder, click **Rescan**. The inbox folder and hidden files are skipped; a scan stops after 6 folder levels or 5,000 files and folders.
+
+**Rename existing files.** In Settings → Names, **Check names** scans the target folder again and lists the PDFs whose names do not follow the naming template (only the file-name part is checked, the folder is not). Select up to 20 files and click **Suggest names**: Filey reads each document like an import (with OpenRouter it is sent and billed like one) and proposes a name built from your template. Then **Accept**, **Skip** or **Accept all**. A file is renamed in its own folder and never moved; if the name is taken it gets `_2`. Files that Filey filed keep their place in the History, so duplicates are still recognized.
 
 **Naming template placeholders.** Keep `.pdf` at the end; `/` creates subfolders.
 
@@ -118,6 +127,8 @@ If iCloud Drive is off or the folder cannot be created there, the last step says
 - **Local models are slower and less exact than cloud models.** A 7B model on a 16 GB Mac can mix up sender and recipient or misread small print. Check the History after the first few documents, and use OpenRouter with a larger model if you need more accuracy.
 - **With Ollama, only the first three pages are read** (at a reduced resolution). Date, sender and title are almost always on the first pages, but a long document whose first pages say nothing useful can end up in `Unsorted`.
 - **You may be asked for the API key again after an update (OpenRouter).** Because the app is not signed with a Developer ID, macOS can treat an updated Filey as a different app and refuse it access to the stored key. Filey then pauses imports and opens Settings so you can paste the key again.
+- **Proposed names can be wrong.** Suggest names reads each document again and can pick a wrong date, sender or title, just like an import. Check every name before you accept it. If a document has no date, the proposal uses today's date.
+- **The folder tree does not update by itself.** Click **Rescan** after you add, rename or remove folders in Finder. Renaming files while iCloud is still syncing them can fail; Filey then shows the error and you check names again.
 - **iCloud placeholders.** With "Optimize Mac Storage", a file can exist only in iCloud. Filey asks macOS to download it and waits up to five minutes; if the download does not finish, the file is skipped (see the log) and picked up again the next time Filey starts.
 
 ## Updates

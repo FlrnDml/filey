@@ -22,6 +22,8 @@ import type { FolderSetup } from './folders/types';
 import type { HistoryRow, InboxRow, InboxStatus } from './history/types';
 import type { ImportState, RetryResult } from './import/types';
 import type { OllamaPullProgress, OllamaPullResult, OllamaStatus } from './ollama/types';
+import type { NameCheckOutcome, NameIssue, NameSuggestion, RenameResult, SuggestNamesOutcome } from './renamer/types';
+import type { ScannedFolder } from './scanner/types';
 import type { FolderRule, Settings, SettingsErrorField } from './settings';
 
 export type {
@@ -33,12 +35,18 @@ export type {
   HistoryRow,
   InboxRow,
   InboxStatus,
+  NameCheckOutcome,
+  NameIssue,
+  NameSuggestion,
   OllamaPullProgress,
   OllamaPullResult,
   OllamaStatus,
+  RenameResult,
   RetryResult,
+  ScannedFolder,
   Settings,
   SettingsErrorField,
+  SuggestNamesOutcome,
 };
 export type { ConnectionTestReason } from './connection-test';
 
@@ -97,6 +105,16 @@ export const IPC_CHANNELS = {
   dialogs: {
     chooseFolder: 'dialogs:choose-folder',
   },
+  folders: {
+    scan: 'folders:scan',
+    lastScan: 'folders:last-scan',
+    suggestDescriptions: 'folders:suggest-descriptions',
+  },
+  names: {
+    check: 'names:check',
+    suggest: 'names:suggest',
+    apply: 'names:apply',
+  },
   popover: {
     hide: 'popover:hide',
     setHeight: 'popover:set-height',
@@ -144,8 +162,30 @@ export type InboxChange = { kind: 'upsert'; row: InboxRow } | { kind: 'remove'; 
  */
 export type HistoryChange = { kind: 'upsert'; row: HistoryRow } | { kind: 'remove'; id: number } | { kind: 'clear' };
 
-export type SettingsTab = 'general' | 'provider' | 'filing';
-export const SETTINGS_TABS: readonly SettingsTab[] = ['general', 'provider', 'filing'];
+export type SettingsTab = 'general' | 'provider' | 'filing' | 'names';
+export const SETTINGS_TABS: readonly SettingsTab[] = ['general', 'provider', 'filing', 'names'];
+
+/** The last scan of the target folder as the renderer sees it (arc42 §5.4): folders only, paths relative to the target. */
+export interface ScanView {
+  /** Sorted by path. */
+  folders: ScannedFolder[];
+  /** Files found in the target folder and below. */
+  fileCount: number;
+  /** True if the scan stopped at its limit (depth 6, 5,000 entries). */
+  truncated: boolean;
+  /** ISO time of the scan. */
+  scannedAt: string;
+}
+
+export type ScanRunResult = { ok: true; scan: ScanView } | { ok: false; reason: 'missing' | 'failed'; message: string };
+
+/** Folder descriptions proposed by the selected provider ("Suggest descriptions"); only for folders of the last scan. */
+export type SuggestDescriptionsResult =
+  | { ok: true; rules: FolderRule[] }
+  | { ok: false; reason: 'no-scan' | 'missing-key' | 'unreadable-key' | 'failed'; message: string };
+
+/** Folders per `folders.suggestDescriptions` call (one request to the provider). */
+export const MAX_DESCRIBE_FOLDERS = 100;
 
 export type FolderKind = 'inbox' | 'target';
 export const FOLDER_KINDS: readonly FolderKind[] = ['inbox', 'target'];
@@ -201,6 +241,14 @@ export interface InvokeContract {
   [IPC_CHANNELS.state.get]: { args: []; result: AppState };
 
   [IPC_CHANNELS.dialogs.chooseFolder]: { args: [kind: FolderKind]; result: string | null };
+
+  [IPC_CHANNELS.folders.scan]: { args: []; result: ScanRunResult };
+  [IPC_CHANNELS.folders.lastScan]: { args: []; result: ScanView | null };
+  [IPC_CHANNELS.folders.suggestDescriptions]: { args: [folders: string[]]; result: SuggestDescriptionsResult };
+
+  [IPC_CHANNELS.names.check]: { args: []; result: NameCheckOutcome };
+  [IPC_CHANNELS.names.suggest]: { args: [paths: string[]]; result: SuggestNamesOutcome };
+  [IPC_CHANNELS.names.apply]: { args: [paths: string[]]; result: RenameResult[] };
 
   [IPC_CHANNELS.popover.hide]: { args: []; result: void };
   [IPC_CHANNELS.popover.setHeight]: { args: [height: number]; result: void };
@@ -309,6 +357,27 @@ export interface FileyApi {
   dialogs: {
     /** Native folder picker; resolves with the chosen path or null if cancelled. Does not save it. */
     chooseFolder(kind: FolderKind): Promise<string | null>;
+  };
+  /** The target folder's existing structure (arc42 §5.4). Nothing here is sent to a provider except `suggestDescriptions`. */
+  folders: {
+    /** Scans the target folder (read-only) and keeps the result in main. */
+    scan(): Promise<ScanRunResult>;
+    /** The last scan of the current target folder, or null. */
+    lastScan(): Promise<ScanView | null>;
+    /**
+     * Asks the selected provider for a description of each folder (paths of the last scan). Sends only the folder paths
+     * and up to 5 file names per folder. Does not save anything.
+     */
+    suggestDescriptions(folders: string[]): Promise<SuggestDescriptionsResult>;
+  };
+  /** The rename queue (arc42 §5.4). */
+  names: {
+    /** Scans the target folder again and lists the PDFs whose names do not follow the naming template. Sends nothing. */
+    check(): Promise<NameCheckOutcome>;
+    /** Analyzes the given files (at most 20, paths from `check`) like an import and proposes names. Renames nothing. */
+    suggest(paths: string[]): Promise<SuggestNamesOutcome>;
+    /** Renames the given files to the names proposed by `suggest`, in place and never overwriting. */
+    apply(paths: string[]): Promise<RenameResult[]>;
   };
   popover: {
     /** Hides the menu-bar popover (Esc). Does nothing if it is not open. */

@@ -1,4 +1,4 @@
-import { asc, desc, eq } from 'drizzle-orm';
+import { asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Orm } from './database';
 import { processedImports, settings, unprocessedImports, type UnprocessedStatus } from './schema';
 
@@ -52,6 +52,8 @@ export interface ProcessedImportsTable {
   listRecent(limit: number): ProcessedImport[];
   /** Removes a history entry, e.g. when its filed document no longer exists. */
   delete(id: number): void;
+  /** Points the entries filed at `from` to `to` (the user renamed the document, arc42 §5.4) and returns them. */
+  updateTargetPath(from: string, to: string): ProcessedImport[];
   /**
    * Removes every history entry (the user cleared the history) and returns how many there were. Inbox rows that
    * were duplicates of one of them lose their link to it. Filed documents on disk are not touched.
@@ -89,6 +91,14 @@ export function createImportTables(orm: Orm): ImportTables {
     delete(id) {
       orm.delete(processedImports).where(eq(processedImports.id, id)).run();
     },
+    updateTargetPath: (from, to) =>
+      // APFS returns names in NFD, Filey stores NFC: match both spellings of the old path.
+      orm
+        .update(processedImports)
+        .set({ targetPath: to })
+        .where(inArray(processedImports.targetPath, [...new Set([from, from.normalize('NFC'), from.normalize('NFD')])]))
+        .returning()
+        .all(),
     deleteAll: () =>
       orm.transaction((tx) => {
         // Explicit, so the link is cleared even where the `ON DELETE SET NULL` of the foreign key is not enforced.

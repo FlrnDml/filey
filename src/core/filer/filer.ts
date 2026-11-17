@@ -14,7 +14,7 @@ export interface FileOptions {
 const isCode = (err: unknown, code: string) => (err as { code?: string } | null)?.code === code;
 
 /** Returns `dir/name.ext`, or `dir/name_2.ext`, `_3`, ... for the first name that does not exist yet. */
-async function freePath(target: string, fs: FileSystem): Promise<string> {
+export async function freePath(target: string, fs: Pick<FileSystem, 'exists'>): Promise<string> {
   if (!(await fs.exists(target))) return target;
   const { dir, name, ext } = path.parse(target);
   for (let n = 2; ; n++) {

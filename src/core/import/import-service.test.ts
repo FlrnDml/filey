@@ -288,6 +288,29 @@ describe('import service', () => {
       expect(t.service.clearHistory()).toBe(0);
     });
 
+    it('lets the history entry follow a renamed document, so it is still found as the original', async () => {
+      const t = setup();
+      await t.apiKeys.set(API_KEY);
+      t.fs.add('/inbox/a.pdf');
+      await t.service.handleFile('/inbox/a.pdf');
+      const [filed] = t.history();
+      const renamed = '/target/Health/Health insurance/2026-10-15_Northwind_Letter.pdf';
+      await t.fs.rename(filed!.targetPath, renamed);
+      t.historyChanges.length = 0;
+
+      t.service.documentRenamed(filed!.targetPath, renamed);
+      expect(t.history()).toMatchObject([{ id: filed!.id, targetPath: renamed }]);
+      expect(t.historyChanges).toEqual([{ kind: 'upsert', record: expect.objectContaining({ id: filed!.id, targetPath: renamed }) }]);
+
+      t.fs.add('/inbox/b.pdf');
+      await t.service.handleFile('/inbox/b.pdf');
+      expect(t.inbox()).toMatchObject([{ status: 'duplicate', duplicateOfId: filed!.id }]);
+
+      t.historyChanges.length = 0;
+      t.service.documentRenamed('/target/unknown.pdf', '/target/other.pdf');
+      expect(t.historyChanges).toEqual([]);
+    });
+
     it('prunes the missing entries and still finds a live original with the same hash', async () => {
       const t = setup();
       await t.apiKeys.set(API_KEY);

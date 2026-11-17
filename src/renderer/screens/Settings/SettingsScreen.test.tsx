@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { ConnectionTestReason, SettingsTab } from '../../../core/ipc';
 import { FIXTURE_NOW } from '../../test/fixtures';
-import { createMockFiley, MOCK_RULES, type MockFileyOptions } from '../../test/mockFiley';
+import { createMockFiley, MOCK_NAME_CHECK, MOCK_RULES, type MockFileyOptions } from '../../test/mockFiley';
 import { SettingsScreen } from './SettingsScreen';
 
 const ICLOUD = '/Users/me/Library/Mobile Documents/com~apple~CloudDocs';
@@ -549,3 +549,140 @@ describe('Settings: Provider with Ollama', () => {
   });
 });
 
+
+describe('Settings: Filing — folder tree (arc42 §5.4)', () => {
+  const tree = () => screen.getByRole('list', { name: 'Folders in the target folder' });
+
+  it('scans and shows every folder with its rule state', async () => {
+    const { user } = await setup('filing');
+    expect(screen.getByText(/Scan the target folder to see its folders/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Scan' }));
+
+    const rows = within(await screen.findByRole('list', { name: 'Folders in the target folder' }));
+    expect(rows.getByText('Letters from my health insurer')).toBeInTheDocument();
+    expect(rows.getByRole('button', { name: 'Add rule for Taxes' })).toBeInTheDocument();
+    expect(rows.getAllByText('No rule')).toHaveLength(2); // Health and Taxes
+    expect(rows.getByText(/Everything about my car insurance.*created on the next filing/)).toBeInTheDocument();
+    expect(screen.getByText(/3 folders, 5 files · scanned at/)).toHaveTextContent('2 folders without a rule');
+    expect(screen.getByRole('button', { name: 'Rescan' })).toBeInTheDocument();
+  });
+
+  it('shows the last scan when the tab opens', async () => {
+    await setup('filing', { lastScan: { folders: [{ path: 'Taxes', fileCount: 1, sampleFileNames: [] }], fileCount: 1, truncated: true, scannedAt: '2026-10-15T10:00:00.000Z' } });
+    expect(await screen.findByRole('button', { name: 'Add rule for Taxes' })).toBeInTheDocument();
+    expect(screen.getByText(/The scan stopped at its limit/)).toBeInTheDocument();
+  });
+
+  it('says why a scan failed', async () => {
+    const { user } = await setup('filing', { scan: { ok: false, reason: 'missing', message: 'The target folder does not exist. Choose another one above.' } });
+    await user.click(screen.getByRole('button', { name: 'Scan' }));
+    expect(await screen.findByText('The target folder does not exist. Choose another one above.')).toBeInTheDocument();
+  });
+
+  it('adds a rule from the tree right away and shows it in the rule list', async () => {
+    const { user, spies } = await setup('filing');
+    await user.click(screen.getByRole('button', { name: 'Scan' }));
+    await user.click(await screen.findByRole('button', { name: 'Add rule for Taxes' }));
+    const dialog = screen.getByRole('dialog', { name: /Edit rule: Taxes/ });
+    await user.type(within(dialog).getByRole('textbox'), 'Letters from the tax office');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect(spies.saveRules).toHaveBeenCalledExactlyOnceWith([
+      MOCK_RULES[0],
+      MOCK_RULES[1],
+      { folder: 'Taxes', description: 'Letters from the tax office' },
+      MOCK_RULES[2],
+    ]);
+    expect(await within(tree()).findByText('Letters from the tax office')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Folder of rule 3' })).toHaveValue('Taxes');
+    expect(screen.getByText('Rule saved.')).toBeInTheDocument();
+  });
+
+  it('maps folders after review, with suggested descriptions', async () => {
+    const { user, spies, api } = await setup('filing');
+    const suggest = vi.spyOn(api.folders, 'suggestDescriptions');
+    await user.click(screen.getByRole('button', { name: 'Scan' }));
+    await user.click(await screen.findByRole('button', { name: 'Map folders' }));
+
+    const panel = within(screen.getByRole('region', { name: 'Map folders' }));
+    expect(panel.getByRole('checkbox', { name: 'Health' })).not.toBeChecked();
+    expect(panel.getByRole('checkbox', { name: 'Taxes' })).toBeChecked();
+    expect(panel.getByRole('textbox', { name: 'Description of Taxes' })).toHaveValue('Documents about Taxes');
+    expect(panel.getByText(/sends the folder names and up to 5 file names per folder to OpenRouter/)).toBeInTheDocument();
+
+    await user.click(panel.getByRole('button', { name: 'Suggest descriptions' }));
+    expect(suggest).toHaveBeenCalledExactlyOnceWith(['Taxes']);
+    await waitFor(() => expect(panel.getByRole('textbox', { name: 'Description of Taxes' })).toHaveValue('About Taxes'));
+
+    await user.click(panel.getByRole('button', { name: 'Add 1 rule' }));
+    expect(spies.saveRules).toHaveBeenCalledExactlyOnceWith([MOCK_RULES[0], MOCK_RULES[1], { folder: 'Taxes', description: 'About Taxes' }, MOCK_RULES[2]]);
+    expect(await screen.findByText('1 rule added.')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Map folders' })).not.toBeInTheDocument();
+  });
+
+  it('names Ollama when it is the provider', async () => {
+    const { user } = await setup('filing', { settings: { provider: 'ollama' } });
+    await user.click(screen.getByRole('button', { name: 'Scan' }));
+    await user.click(await screen.findByRole('button', { name: 'Map folders' }));
+    expect(screen.getByText(/asks Ollama on this Mac/)).toBeInTheDocument();
+  });
+});
+
+describe('Settings: Names (arc42 §5.4)', () => {
+  it('checks names, suggests names for the selected files and renames after Accept', async () => {
+    const { user, api } = await setup('names');
+    const suggest = vi.spyOn(api.names, 'suggest');
+    const apply = vi.spyOn(api.names, 'apply');
+    await user.click(screen.getByRole('button', { name: 'Check names' }));
+
+    const files = within(await screen.findByRole('list', { name: 'Files to rename' }));
+    expect(screen.getByText('2 of 5 PDFs do not follow the naming template.')).toBeInTheDocument();
+    expect(files.getByRole('checkbox', { name: 'Tax 2025.pdf' })).toBeChecked();
+    expect(files.getByText('Target folder · in iCloud, downloaded first')).toBeInTheDocument();
+    expect(screen.getByText(/sends the selected documents to OpenRouter, like an import/)).toBeInTheDocument();
+    await user.click(files.getByRole('checkbox', { name: 'Scan 12.pdf' }));
+
+    await user.click(screen.getByRole('button', { name: 'Suggest names (1)' }));
+    expect(suggest).toHaveBeenCalledExactlyOnceWith(['Taxes/Tax 2025.pdf']);
+    const queue = within(await screen.findByRole('list', { name: 'Proposed names' }));
+    expect(queue.getByText('2026-10-15_Northwind_Invoice.pdf')).toBeInTheDocument();
+    expect(apply).not.toHaveBeenCalled();
+
+    await user.click(queue.getByRole('button', { name: 'Accept 2026-10-15_Northwind_Invoice.pdf for Tax 2025.pdf' }));
+    expect(apply).toHaveBeenCalledExactlyOnceWith(['Taxes/Tax 2025.pdf']);
+    expect(await queue.findByText('Renamed')).toBeInTheDocument();
+    expect(screen.getByText('1 file renamed.')).toBeInTheDocument();
+  });
+
+  it('accepts all, skips, and shows per-file errors', async () => {
+    const { user } = await setup('names', {
+      applyNames: (paths) => paths.map((path) => ({ path, ok: false, message: 'The file is no longer there. Check names again.' })),
+    });
+    await user.click(screen.getByRole('button', { name: 'Check names' }));
+    await user.click(await screen.findByRole('button', { name: 'Suggest names (2)' }));
+    const queue = within(await screen.findByRole('list', { name: 'Proposed names' }));
+    await user.click(queue.getByRole('button', { name: 'Skip Scan 12.pdf' }));
+    expect(queue.queryByText('Scan 12.pdf')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Accept all (1)' }));
+    expect(await queue.findByText('The file is no longer there. Check names again.')).toBeInTheDocument();
+    expect(screen.getByText('1 file could not be renamed.')).toBeInTheDocument();
+  });
+
+  it('says why suggesting failed', async () => {
+    const { user } = await setup('names', {
+      nameCheck: { ok: true, checked: 4, truncated: false, issues: MOCK_NAME_CHECK.ok ? MOCK_NAME_CHECK.issues.slice(0, 1) : [] },
+      suggestNames: () => ({ ok: false, reason: 'missing-key', message: 'Add your OpenRouter API key under Provider first.' }),
+    });
+    await user.click(screen.getByRole('button', { name: 'Check names' }));
+    await user.click(await screen.findByRole('button', { name: 'Suggest names (1)' }));
+    expect(await screen.findByText('Add your OpenRouter API key under Provider first.')).toBeInTheDocument();
+  });
+
+  it('says when every name already follows the template', async () => {
+    const { user } = await setup('names', { nameCheck: { ok: true, checked: 4, truncated: false, issues: [] } });
+    await user.click(screen.getByRole('button', { name: 'Check names' }));
+    expect(await screen.findByText('All 4 PDFs follow the naming template.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument();
+  });
+});

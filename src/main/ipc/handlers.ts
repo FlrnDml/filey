@@ -24,7 +24,7 @@ import {
   type SettingsTab,
 } from '../../core/ipc';
 import type { FileSystem, LogFileSystem, Logger } from '../../core/ports';
-import { PROVIDERS, SettingsValidationError, type SettingsRepository } from '../../core/settings';
+import { PROVIDERS, RULE_LIMITS, SettingsValidationError, type SettingsRepository } from '../../core/settings';
 import type { Watcher } from '../../core/watcher';
 import { currentAppState } from './events';
 import type { IpcHandlers } from './register';
@@ -46,9 +46,9 @@ export const LIMITS = {
   ollamaUrl: 200,
   namingTemplate: 500,
   apiKey: 4096,
-  folder: 255,
-  description: 2000,
-  rules: 200,
+  folder: RULE_LIMITS.folder,
+  description: RULE_LIMITS.description,
+  rules: RULE_LIMITS.rules,
   query: 200,
 } as const;
 
