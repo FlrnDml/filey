@@ -62,6 +62,7 @@ export function createFileyApi(ipcRenderer: IpcRendererLike): FileyApi {
     history: {
       list: (query) => invoke(history.list, query),
       revealInFinder: (id) => invoke(history.revealInFinder, id),
+      clear: () => invoke(history.clear),
       onChanged: (listener) => subscribe(history.changed, listener),
     },
     state: {

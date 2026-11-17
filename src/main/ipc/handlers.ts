@@ -114,6 +114,7 @@ export interface ServiceHandlerDeps {
     | 'handleRemoved'
     | 'listHistory'
     | 'getHistoryEntry'
+    | 'clearHistory'
     | 'getState'
     | 'queuedCount'
     | 'analyzingId'
@@ -372,6 +373,13 @@ export function createServiceHandlers(deps: ServiceHandlerDeps): IpcHandlers {
         const record = imports.getHistoryEntry(id);
         if (!record) return { ok: false, reason: 'not-found', message: USER_MESSAGES.importNotFound };
         return reveal(`import ${id}`, record.targetPath);
+      },
+    },
+    [history.clear]: {
+      validate: expectNoArgs,
+      handle: () => {
+        const removed = imports.clearHistory();
+        logger.log('info', `IPC: history cleared (${removed} ${removed === 1 ? 'entry' : 'entries'})`);
       },
     },
 

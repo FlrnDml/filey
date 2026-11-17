@@ -62,6 +62,7 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
   const [selectedHistoryId, setSelectedHistoryId] = useState<number | null>(null);
   const [retrying, setRetrying] = useState<ReadonlySet<number>>(() => new Set());
   const [message, setMessage] = useState<string | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
   const [clock, setClock] = useState(now);
   const [focusTick, setFocusTick] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -80,6 +81,8 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
     // Files that left the inbox or history before its list arrived must not come back with the list.
     const removedInbox = new Set<number>();
     const removedHistory = new Set<number>();
+    // Set when the history was cleared before its list arrived: whatever was filed since arrives as an event.
+    let historyCleared = false;
     const applyInbox = (update: (rows: InboxEntry[] | null) => InboxEntry[]) => {
       inboxRowsRef.current = update(inboxRowsRef.current);
       setInboxRows(inboxRowsRef.current);
@@ -97,6 +100,10 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
       if (change.kind === 'upsert') {
         removedHistory.delete(change.row.id);
         setHistoryRows((prev) => upsertHistory(prev ?? [], change.row, HISTORY_LIMIT));
+      } else if (change.kind === 'clear') {
+        historyCleared = true;
+        setHistoryRows([]);
+        setSelectedHistoryId(null);
       } else {
         removedHistory.add(change.id);
         setHistoryRows((prev) => removeRow(prev ?? [], change.id));
@@ -115,7 +122,9 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
     api.history.list({ limit: HISTORY_LIMIT }).then(
       (list) =>
         active &&
-        setHistoryRows((prev) => (prev ?? []).reduce((acc, row) => upsertHistory(acc, row, HISTORY_LIMIT), list.filter((row) => !removedHistory.has(row.id)))),
+        setHistoryRows((prev) =>
+          (prev ?? []).reduce((acc, row) => upsertHistory(acc, row, HISTORY_LIMIT), historyCleared ? [] : list.filter((row) => !removedHistory.has(row.id))),
+        ),
       () => active && setHistoryRows((prev) => prev ?? []),
     );
     api.state.get().then(
@@ -141,6 +150,7 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
     const onFocus = () => {
       setClock(now());
       setMessage(null);
+      setConfirmingClear(false);
       pickedRef.current = false;
       setView(defaultView(inboxRowsRef.current));
       setFocusTick((tick) => tick + 1);
@@ -206,6 +216,7 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
 
   const selectView = useCallback((next: View) => {
     pickedRef.current = true;
+    setConfirmingClear(false);
     setView(next);
   }, []);
 
@@ -244,6 +255,14 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
   const revealHistory = useCallback((id: number) => run((): Promise<RevealResult> => api.history.revealInFinder(id), 'Filey could not show this file in Finder.'), [api, run]);
   const trash = useCallback((id: number) => run(() => api.inbox.moveToTrash(id), 'Filey could not move this file to the Trash.'), [api, run]);
   const openInbox = useCallback(() => run(() => api.inbox.openFolder(), 'The inbox folder could not be opened.'), [api, run]);
+
+  const clearHistory = useCallback(async () => {
+    setConfirmingClear(false);
+    await run(async () => {
+      await api.history.clear();
+      return { ok: true };
+    }, 'Filey could not clear the history.');
+  }, [api, run]);
 
   const openSettings = useCallback(() => void api.app.openSettings().catch(() => undefined), [api]);
   const quit = useCallback(() => void api.app.quit().catch(() => undefined), [api]);
@@ -288,6 +307,10 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [api, openInbox, openSettings, quit, selectView]);
+
+  // The question only makes sense next to a history that has entries.
+  const historyCount = historyRows?.length ?? 0;
+  const canClearHistory = view === 'history' && historyCount > 0;
 
   const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -477,6 +500,23 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
         ]}
       />
 
+      {confirmingClear && canClearHistory && (
+        <div className="popover__notice" role="alertdialog" aria-labelledby={`${listId}-clear-text`}>
+          <p className="type-small" id={`${listId}-clear-text`}>
+            Remove {historyCount === 1 ? 'this document' : `all ${historyCount} documents`} from the history? The files stay in their folders, but Filey will no
+            longer recognize them as duplicates.
+          </p>
+          <div className="popover__actions">
+            <Button autoFocus onClick={() => setConfirmingClear(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => void clearHistory()}>
+              Clear history
+            </Button>
+          </div>
+        </div>
+      )}
+
       {message && (
         <p className="type-small popover__message" role="alert">
           {message}
@@ -484,6 +524,7 @@ export function Popover({ api = window.filey, now = systemNow }: PopoverProps) {
       )}
 
       <footer className="popover__footer">
+        {canClearHistory && !confirmingClear && <MenuItem label="Clear history…" onClick={() => setConfirmingClear(true)} />}
         <MenuItem label="Open inbox folder" shortcut="⌘I" onClick={() => void openInbox()} />
         <MenuItem label="Settings…" shortcut="⌘," onClick={openSettings} />
         <MenuItem label="Quit Filey" shortcut="⌘Q" onClick={quit} />

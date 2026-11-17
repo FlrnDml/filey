@@ -141,6 +141,21 @@ describe('tables', () => {
     expect(imports.unprocessed.getByPath('/in/b.pdf')?.duplicateOfId).toBeNull();
   });
 
+  it('removes every history entry at once and unlinks the duplicates of them', () => {
+    const { imports } = open();
+    const a = imports.markFiled('/in/a.pdf', { contentHash: 'h', originalName: 'a.pdf', targetPath: '/t/a.pdf', filedAt: NOW });
+    imports.markFiled('/in/c.pdf', { contentHash: 'k', originalName: 'c.pdf', targetPath: '/t/c.pdf', filedAt: NOW });
+    imports.unprocessed.upsert({ inboxPath: '/in/b.pdf', fileName: 'b.pdf', contentHash: 'h', status: 'duplicate', duplicateOfId: a.id, now: NOW });
+    imports.unprocessed.upsert({ inboxPath: '/in/d.pdf', fileName: 'd.pdf', contentHash: 'x', status: 'failed', error: 'no', now: NOW });
+
+    expect(imports.processed.deleteAll()).toBe(2);
+    expect(imports.processed.listRecent(10)).toEqual([]);
+    expect(imports.processed.findByContentHash('h')).toEqual([]);
+    expect(imports.unprocessed.list()).toHaveLength(2);
+    expect(imports.unprocessed.getByPath('/in/b.pdf')).toMatchObject({ status: 'duplicate', duplicateOfId: null });
+    expect(imports.processed.deleteAll()).toBe(0);
+  });
+
   it('rejects an unknown inbox status', () => {
     const { imports } = open();
     expect(() => imports.unprocessed.upsert({ inboxPath: '/x', fileName: 'x', contentHash: 'h', status: 'bogus' as never, now: NOW })).toThrow();
