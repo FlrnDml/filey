@@ -14,7 +14,7 @@ See <https://github.com/electron/electron/blob/main/LICENSE>.
 
 | Package | Version | License |
 | --- | --- | --- |
-| @ai-sdk/gateway | 4.0.145 | Apache-2.0 |
+| @ai-sdk/gateway | 4.0.146 | Apache-2.0 |
 | @ai-sdk/provider | 4.0.38 | Apache-2.0 |
 | @ai-sdk/provider-utils | 5.0.81 | Apache-2.0 (see note) |
 | @napi-rs/canvas | 1.1.1 | MIT |
@@ -23,7 +23,7 @@ See <https://github.com/electron/electron/blob/main/LICENSE>.
 | @standard-schema/spec | 1.1.0 | MIT |
 | @vercel/oidc | 3.2.0 | Apache-2.0 |
 | @workflow/serde | 4.1.0 | Apache-2.0 |
-| ai | 7.0.172 | Apache-2.0 |
+| ai | 7.0.173 | Apache-2.0 |
 | chokidar | 6.0.0 | MIT |
 | drizzle-orm | 1.0.0-rc.4 | Apache-2.0 (see note) |
 | eventsource-parser | 3.1.1 | MIT |
@@ -40,7 +40,7 @@ Note: @ai-sdk/provider-utils, @napi-rs/canvas-darwin-arm64, drizzle-orm declare 
 
 ## License texts
 
-**@ai-sdk/gateway@4.0.145**, **@ai-sdk/provider@4.0.38**, **@ai-sdk/provider-utils@5.0.81**, **ai@7.0.172**
+**@ai-sdk/gateway@4.0.146**, **@ai-sdk/provider@4.0.38**, **@ai-sdk/provider-utils@5.0.81**, **ai@7.0.173**
 
 @ai-sdk/gateway: <https://github.com/vercel/ai>  
 @ai-sdk/provider: <https://github.com/vercel/ai>  

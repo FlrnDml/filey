@@ -258,6 +258,36 @@ describe('import service', () => {
       expect(t.inbox()).toEqual([]);
     });
 
+    it('clears the history: the documents stay, the same content is imported again and inbox duplicates lose their original', async () => {
+      const t = setup();
+      await t.apiKeys.set(API_KEY);
+      t.fs.add('/inbox/a.pdf');
+      await t.service.handleFile('/inbox/a.pdf');
+      const [filed] = t.history();
+      t.fs.add('/inbox/b.pdf');
+      await t.service.handleFile('/inbox/b.pdf');
+      expect(t.inbox()).toMatchObject([{ status: 'duplicate', duplicateOfId: filed!.id }]);
+      const [dupe] = t.inbox();
+      t.inboxChanges.length = 0;
+      t.historyChanges.length = 0;
+
+      expect(t.service.clearHistory()).toBe(1);
+
+      expect(t.history()).toEqual([]);
+      expect(t.fs.files.has(filed!.targetPath)).toBe(true);
+      expect(t.historyChanges).toEqual([{ kind: 'clear' }]);
+      expect(t.inboxChanges).toEqual([{ kind: 'upsert', record: expect.objectContaining({ id: dupe!.id, status: 'duplicate', duplicateOfId: null }) }]);
+      expect(t.logs).toContain('info: Import: history cleared (1 entry)');
+
+      // The duplicate check has nothing to compare with any more: the same content is filed again.
+      t.fs.add('/inbox/c.pdf');
+      await t.service.handleFile('/inbox/c.pdf');
+      expect(t.calls).toHaveLength(2);
+      expect(t.history()).toHaveLength(1);
+      expect(t.service.clearHistory()).toBe(1);
+      expect(t.service.clearHistory()).toBe(0);
+    });
+
     it('prunes the missing entries and still finds a live original with the same hash', async () => {
       const t = setup();
       await t.apiKeys.set(API_KEY);

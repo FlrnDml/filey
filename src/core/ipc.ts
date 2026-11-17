@@ -87,6 +87,7 @@ export const IPC_CHANNELS = {
   history: {
     list: 'history:list',
     revealInFinder: 'history:reveal-in-finder',
+    clear: 'history:clear',
     changed: 'history:changed',
   },
   state: {
@@ -137,8 +138,11 @@ export type AppState = ImportState & { queuedCount: number; analyzingId: number 
 
 /** A change to the Inbox view: a row was written, or the file left the inbox. */
 export type InboxChange = { kind: 'upsert'; row: InboxRow } | { kind: 'remove'; id: number };
-/** A change to the History view: a document was filed, or its entry was removed (its file no longer exists). */
-export type HistoryChange = { kind: 'upsert'; row: HistoryRow } | { kind: 'remove'; id: number };
+/**
+ * A change to the History view: a document was filed, its entry was removed (its file no longer exists), or the
+ * whole history was cleared by the user.
+ */
+export type HistoryChange = { kind: 'upsert'; row: HistoryRow } | { kind: 'remove'; id: number } | { kind: 'clear' };
 
 export type SettingsTab = 'general' | 'provider' | 'filing';
 export const SETTINGS_TABS: readonly SettingsTab[] = ['general', 'provider', 'filing'];
@@ -192,6 +196,7 @@ export interface InvokeContract {
 
   [IPC_CHANNELS.history.list]: { args: [query: HistoryQuery]; result: HistoryRow[] };
   [IPC_CHANNELS.history.revealInFinder]: { args: [id: number]; result: RevealResult };
+  [IPC_CHANNELS.history.clear]: { args: []; result: void };
 
   [IPC_CHANNELS.state.get]: { args: []; result: AppState };
 
@@ -290,6 +295,11 @@ export interface FileyApi {
     list(query: HistoryQuery): Promise<HistoryRow[]>;
     /** Reveals the filed document (also used for "Show original" of a duplicate). */
     revealInFinder(id: number): Promise<RevealResult>;
+    /**
+     * Removes all documents from the history. The files stay where they are; they are no longer checked for
+     * duplicates. The History view empties via `history:changed`.
+     */
+    clear(): Promise<void>;
     onChanged(listener: Listener<typeof IPC_CHANNELS.history.changed>): Unsubscribe;
   };
   state: {

@@ -21,6 +21,7 @@ async function setup(options: MockFileyOptions = DEFAULTS, view: 'Inbox' | 'Hist
     revealInbox: vi.spyOn(api.inbox, 'revealInFinder'),
     openFolder: vi.spyOn(api.inbox, 'openFolder'),
     revealHistory: vi.spyOn(api.history, 'revealInFinder'),
+    clearHistory: vi.spyOn(api.history, 'clear'),
     openSettings: vi.spyOn(api.app, 'openSettings'),
     quit: vi.spyOn(api.app, 'quit'),
     hide: vi.spyOn(api.popover, 'hide'),
@@ -281,6 +282,50 @@ describe('Popover', () => {
       expect(options()).toHaveLength(1);
       act(() => emit('history:changed', { kind: 'remove', id: FIXTURE_HISTORY[0]!.id }));
       expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    });
+
+    it('clears the history after a confirmation', async () => {
+      const { user, spies } = await setup({ history: FIXTURE_HISTORY }, 'History');
+      await user.click(screen.getByRole('button', { name: 'Clear history…' }));
+      const dialog = screen.getByRole('alertdialog');
+      expect(dialog).toHaveTextContent(`all ${FIXTURE_HISTORY.length} documents`);
+      expect(spies.clearHistory).not.toHaveBeenCalled();
+
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(spies.clearHistory).not.toHaveBeenCalled();
+      expect(options()).toHaveLength(FIXTURE_HISTORY.length);
+
+      await user.click(screen.getByRole('button', { name: 'Clear history…' }));
+      await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Clear history' }));
+      expect(spies.clearHistory).toHaveBeenCalledOnce();
+      expect(await screen.findByText('Nothing filed yet. Scan a letter into Documents.')).toBeInTheDocument();
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear history…' })).not.toBeInTheDocument();
+    });
+
+    it('offers to clear only in the History view and only when it has entries', async () => {
+      const { user } = await setup();
+      expect(screen.queryByRole('button', { name: 'Clear history…' })).not.toBeInTheDocument();
+      await user.click(tab('History'));
+      expect(screen.getByRole('button', { name: 'Clear history…' })).toBeInTheDocument();
+      await user.click(tab('Inbox'));
+      expect(screen.queryByRole('button', { name: 'Clear history…' })).not.toBeInTheDocument();
+    });
+
+    it('shows a message when clearing fails', async () => {
+      const { user, spies } = await setup({ history: FIXTURE_HISTORY }, 'History');
+      spies.clearHistory.mockRejectedValueOnce(new Error('boom'));
+      await user.click(screen.getByRole('button', { name: 'Clear history…' }));
+      await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Clear history' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Filey could not clear the history.');
+      expect(options()).toHaveLength(FIXTURE_HISTORY.length);
+    });
+
+    it('empties live when the history is cleared elsewhere', async () => {
+      const { emit } = await setup({ history: FIXTURE_HISTORY }, 'History');
+      act(() => emit('history:changed', { kind: 'clear' }));
+      expect(await screen.findByText('Nothing filed yet. Scan a letter into Documents.')).toBeInTheDocument();
     });
   });
 

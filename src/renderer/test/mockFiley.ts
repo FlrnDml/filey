@@ -181,6 +181,7 @@ export function createMockFiley({
     history: {
       list: async ({ limit }) => history.slice(0, limit),
       revealInFinder: async () => ({ ok: true }),
+      clear: async () => emit('history:changed', { kind: 'clear' }),
       onChanged: on('history:changed'),
     },
     state: { get: async () => appState, onChanged: on('state:changed') },

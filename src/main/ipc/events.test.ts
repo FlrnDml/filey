@@ -67,6 +67,7 @@ function fakeService() {
       inbox.forEach((l) => l({ kind: 'remove', id }));
     },
     writeHistory: (record: ProcessedImport) => history.forEach((l) => l({ kind: 'upsert', record })),
+    clearHistory: () => history.forEach((l) => l({ kind: 'clear' })),
     setState: (s: ImportState) => {
       state = s;
       states.forEach((l) => l(s));
@@ -89,6 +90,7 @@ describe('connectPipelineEvents', () => {
 
     f.writeInbox(failed);
     f.writeHistory(filed);
+    f.clearHistory();
     f.setState({ mode: 'offline' });
     f.setQueued(2);
     f.removeInbox(7);
@@ -98,6 +100,7 @@ describe('connectPipelineEvents', () => {
       [IPC_CHANNELS.inbox.changed, { kind: 'upsert', row: expect.objectContaining({ id: 7, fileName: 'Scan.pdf', status: 'failed', working: false }) }],
       [IPC_CHANNELS.state.changed, { mode: 'running', queuedCount: 0, ...base, attentionCount: 1 }],
       [IPC_CHANNELS.history.changed, { kind: 'upsert', row: expect.objectContaining({ id: 3, finalName: '2026-10-15_ACME_Payslip.pdf', folder: 'Work' }) }],
+      [IPC_CHANNELS.history.changed, { kind: 'clear' }],
       [IPC_CHANNELS.state.changed, { mode: 'offline', queuedCount: 0, ...base, attentionCount: 1 }],
       [IPC_CHANNELS.state.changed, { mode: 'offline', queuedCount: 2, ...base, attentionCount: 1 }],
       [IPC_CHANNELS.inbox.changed, { kind: 'remove', id: 7 }],

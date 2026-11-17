@@ -59,6 +59,7 @@ describe('createFileyApi', () => {
       [() => api.inbox.revealInFinder(4), [C.inbox.revealInFinder, 4]],
       [() => api.inbox.openFolder(), [C.inbox.openFolder]],
       [() => api.history.revealInFinder(4), [C.history.revealInFinder, 4]],
+      [() => api.history.clear(), [C.history.clear]],
       [() => api.state.get(), [C.state.get]],
       [() => api.dialogs.chooseFolder('target'), [C.dialogs.chooseFolder, 'target']],
       [() => api.popover.hide(), [C.popover.hide]],

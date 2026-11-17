@@ -52,6 +52,11 @@ export interface ProcessedImportsTable {
   listRecent(limit: number): ProcessedImport[];
   /** Removes a history entry, e.g. when its filed document no longer exists. */
   delete(id: number): void;
+  /**
+   * Removes every history entry (the user cleared the history) and returns how many there were. Inbox rows that
+   * were duplicates of one of them lose their link to it. Filed documents on disk are not touched.
+   */
+  deleteAll(): number;
 }
 
 export interface UnprocessedImportsTable {
@@ -84,6 +89,12 @@ export function createImportTables(orm: Orm): ImportTables {
     delete(id) {
       orm.delete(processedImports).where(eq(processedImports.id, id)).run();
     },
+    deleteAll: () =>
+      orm.transaction((tx) => {
+        // Explicit, so the link is cleared even where the `ON DELETE SET NULL` of the foreign key is not enforced.
+        tx.update(unprocessedImports).set({ duplicateOfId: null }).run();
+        return tx.delete(processedImports).returning({ id: processedImports.id }).all().length;
+      }),
   };
 
   const unprocessed: UnprocessedImportsTable = {

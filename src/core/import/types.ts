@@ -20,8 +20,8 @@ export type RetryResult = 'started' | 'not-found' | 'not-failed' | 'file-missing
 /** A change to the inbox list (`unprocessed_imports`): a row was written, or the file left the inbox. */
 export type InboxChange = { kind: 'upsert'; record: UnprocessedImport } | { kind: 'remove'; id: number };
 
-/** A change to the history (`processed_imports`): a document was filed, or its entry was removed. */
-export type HistoryChange = { kind: 'upsert'; record: ProcessedImport } | { kind: 'remove'; id: number };
+/** A change to the history (`processed_imports`): a document was filed, an entry was removed, or the user cleared it all. */
+export type HistoryChange = { kind: 'upsert'; record: ProcessedImport } | { kind: 'remove'; id: number } | { kind: 'clear' };
 
 export interface ImportServiceDeps {
   imports: ImportTables;
@@ -66,6 +66,11 @@ export interface ImportService {
   /** Filed documents, most recent first. */
   listHistory(limit: number): ProcessedImport[];
   getHistoryEntry(historyId: number): ProcessedImport | undefined;
+  /**
+   * Removes every entry from the history and returns how many there were. The filed documents stay where they
+   * are; they are just no longer checked for duplicates. Inbox duplicates of them lose their "original".
+   */
+  clearHistory(): number;
   /** Called after every history write or removal (feeds `history:changed`). Returns an unsubscribe function. */
   onHistoryChanged(listener: (change: HistoryChange) => void): () => void;
   /** Number of files waiting for the connection. */

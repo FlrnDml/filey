@@ -37,9 +37,25 @@ function truncateBytes(value: string, max: number): string {
   return out;
 }
 
+const NAMED_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
+/**
+ * Models sometimes return HTML-escaped text (`R&#xF6;ntgen` for `Röntgen`). Decodes numeric and the common named
+ * entities once, so the characters end up as intended. Runs before the path sanitizing below, so a decoded `/`,
+ * `..` or `<` is still neutralized. Unknown or invalid entities stay as they are.
+ */
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(?:#x([0-9a-f]{1,6})|#(\d{1,7})|([a-z]+));/gi, (match, hex?: string, dec?: string, name?: string) => {
+    if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? match;
+    const codePoint = hex ? parseInt(hex, 16) : parseInt(dec ?? '', 10);
+    const isValid = codePoint > 0 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff);
+    return isValid ? String.fromCodePoint(codePoint) : match;
+  });
+}
+
 /** Sanitizes one value for use inside a single path segment. Returns '' if nothing usable is left. */
 export function sanitizeValue(value: string | null | undefined): string {
-  return (value ?? '')
+  return decodeHtmlEntities(value ?? '')
     .normalize('NFC')
     .replace(SEPARATORS, '-')
     .replace(CONTROL_CHARS, ' ')
