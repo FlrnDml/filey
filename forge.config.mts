@@ -73,6 +73,10 @@ const config: ForgeConfig = {
     new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({
       mainConfig,
+      // The dev server would add its hot-reload client to the preload bundles too (they are built for the web
+      // target). That client does `require('events')`, which Electron's sandboxed preload cannot resolve, so the
+      // preload failed to load and every window stayed empty. Reload the window (Cmd+R) after renderer changes.
+      devServer: { hot: false, liveReload: false, client: false },
       renderer: {
         config: rendererConfig,
         entryPoints: [
